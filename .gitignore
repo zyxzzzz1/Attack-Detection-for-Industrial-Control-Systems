@@ -25,3 +25,4 @@ cluster/local/
 # 主线中间产物（模型、分数、checkpoint）不入库
 artifacts/
 CLAUDE.md
+CLAUDE.md
