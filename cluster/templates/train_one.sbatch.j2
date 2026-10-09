@@ -1,0 +1,45 @@
+#!/bin/bash
+#SBATCH --job-name={{ name }}
+#SBATCH --partition={{ job.partition }}
+{%- if job.gres is defined %}
+#SBATCH --gres={{ job.gres }}
+{%- endif %}
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task={{ job.cpus_per_task }}
+#SBATCH --mem={{ job.mem }}
+{%- if not job.time.startswith('TODO') %}
+#SBATCH --time={{ job.time }}
+{%- else %}
+# --time 尚未写入 cluster.yaml：提交时必须显式给出，如 sbatch --time=02:00:00 ...
+{%- endif %}
+{%- if array %}
+#SBATCH --array={{ array }}
+#SBATCH --output={{ paths.artifact_dir }}/slurm_logs/%x_%A_%a.out
+{%- else %}
+#SBATCH --output={{ paths.artifact_dir }}/slurm_logs/%x_%j.out
+{%- endif %}
+#
+# 由 scripts/make_cluster_jobs.py 按 config/cluster.yaml 生成，不要手改（改 cluster/templates/ 或 cluster.yaml 后重新生成）。
+{%- if todo_keys %}
+# 注意：cluster.yaml 还有影响作业的 TODO（{{ todo_keys | join("、") }}），补全并重新生成之前不能在集群上提交。
+{%- endif %}
+#
+# 训练、打分、阈值、评估一个模型。作业被中断后原样重新提交即可从 checkpoint 继续（--resume）。
+# 用法：
+#   sbatch [--time=HH:MM:SS] cluster/train_one.sbatch <模型名> [run_model 的其他参数，如 --set ml.train.max_epochs=1]
+#   bash cluster/train_one.sbatch --smoke <模型名> [...]        # 本地冒烟，不经过调度器
+set -euo pipefail
+
+if [[ "${1:-}" == "--smoke" ]]; then SMOKE=1; shift; else SMOKE=0; fi
+if [[ "${SMOKE}" == "1" ]]; then
+    # shellcheck source=/dev/null
+    source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/job_common.sh"
+else
+    # sbatch 会把脚本复制到 spool 目录，所以用代码目录的绝对路径
+    # shellcheck source=/dev/null
+    source "{{ paths.code_dir }}/cluster/job_common.sh"
+fi
+
+MODEL="${1:?用法：train_one.sbatch [--smoke] <模型名> [--set key=value ...]}"
+shift
+python -m src.run_model --model "${MODEL}" --resume "${SMOKE_ARGS[@]}" "$@"

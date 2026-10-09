@@ -1,0 +1,84 @@
+"""报告脚本共用：产物从哪里读、结果写到哪里、哪些运行可以用。
+
+两种模式，互不混用：
+- 正式（默认）：读产物根目录下的运行，只接受集群上的完整运行（非冒烟、非本地诊断、git_dirty=false、已完成），写到 ml.report_dir。
+- 冒烟（--smoke）：只读 产物根目录/smoke/ 下的冒烟运行，写到 产物根目录/smoke_reports/。只用于开发和检查流程，
+  数字不得写进报告；这种模式下不会写 reports/main/ 或 data/processed/。
+"""
+
+import argparse
+import json
+from pathlib import Path
+
+from src.utils.paths import artifact_dir, resolve
+from src.utils.run import MANIFEST_NAME
+
+
+def report_problem(run_dir: Path, ok_status: tuple[str, ...] = ("completed",)) -> str | None:
+    """运行不能用于正式报告的原因；可以用时返回 None。"""
+    path = Path(run_dir) / MANIFEST_NAME
+    if not path.exists():
+        return "没有 run_manifest.json"
+    m = json.loads(path.read_text(encoding="utf-8"))
+    if m.get("local_diagnostic"):
+        return "本地诊断运行（local_diagnostic=true，只用于决策，不得写进报告）"
+    if m.get("smoke"):
+        return "冒烟测试的产物（数字不得写进报告）"
+    if m.get("git_dirty") is not False:
+        return f"git_dirty = {m.get('git_dirty')}（必须为 false）"
+    if m.get("status") not in ok_status:
+        return f"status = {m.get('status')}"
+    return None
+
+
+def smoke_problem(run_dir: Path) -> str | None:
+    """冒烟模式下运行不能用的原因：必须确实是已完成的冒烟运行。"""
+    path = Path(run_dir) / MANIFEST_NAME
+    if not path.exists():
+        return "没有 run_manifest.json"
+    m = json.loads(path.read_text(encoding="utf-8"))
+    if not m.get("smoke"):
+        return "不是冒烟运行（冒烟模式只读冒烟产物）"
+    if m.get("status") != "completed":
+        return f"status = {m.get('status')}"
+    return None
+
+
+class ReportSource:
+    def __init__(self, cfg: dict, smoke: bool) -> None:
+        self.cfg, self.smoke = cfg, smoke
+        base = artifact_dir(cfg)
+        sm = cfg["ml"]["smoke"]
+        self.root = base / sm["artifact_subdir"] if smoke else base
+        self.out = base / sm["report_subdir"] if smoke else resolve(cfg["ml"]["report_dir"])
+        self.out.mkdir(parents=True, exist_ok=True)
+
+    def problem(self, run_name: str) -> str | None:
+        run_dir = self.root / run_name
+        return smoke_problem(run_dir) if self.smoke else report_problem(run_dir)
+
+    def usable_runs(self, run_names: list[str], required: tuple[str, ...] = ()) -> list[str]:
+        """可用的运行名；不可用的打印原因并跳过。required 为必须存在的产物文件。"""
+        ok = []
+        for name in run_names:
+            run_dir = self.root / name
+            missing = [f for f in required if not (run_dir / f).exists()]
+            problem = self.problem(name) if run_dir.exists() else "运行目录不存在（尚未运行或尚未同步）"
+            if not problem and missing:
+                problem = f"缺少 {', '.join(missing)}"
+            if problem:
+                print(f"[跳过] {name}: {problem}")
+            else:
+                ok.append(name)
+        return ok
+
+    def banner(self) -> None:
+        if self.smoke:
+            print(f"[冒烟] 读取 {self.root}，写到 {self.out}；数字只用于检查流程，不得写进报告")
+
+
+def add_common_args(p: argparse.ArgumentParser) -> None:
+    from src.utils.paths import DEFAULT_CONFIG
+    p.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    p.add_argument("--smoke", action="store_true",
+                   help="用冒烟产物（产物目录/smoke/）开发和检查流程，输出写到 产物目录/smoke_reports/，不进报告目录")

@@ -1,0 +1,211 @@
+# 英文译文表（ui.lang: en）。键是代码和模板里的中文源文，值是英文；zh 时直接使用键。
+# 只是显示文字：{名字} 是数字或数据的占位符，译文里必须保留同样的占位符，不能写入具体数字。
+# 增删显示文字后运行 python -m scripts.i18n_keys 检查有没有缺少或多余的键（测试也会检查）。
+　: ' '
+、: ', '
+。: ' '
+，: ', '
+：: ': '
+；: '; '
+资产映射与漏洞数据来自实验环境，仅用于演示: Asset mapping and vulnerability data come from a lab environment and are for demonstration only.
+免责声明：: 'Disclaimer: '
+值: Value
+无: none
+卡片: Card
+名称: Name
+告警: Alert
+排名: Rank
+概要: Summary
+漏洞: Vulnerability
+状态: Status
+端口: Port
+资产: Asset
+项目: Item
+传感器: Sensor
+子系统: Subsystem
+已扫描: Scanned
+已评估: Assessed
+未评估: Not assessed
+注意：: 'Note: '
+说明：: 'Note: '
+需核实的 KEV 漏洞: KEV vulns needing review
+可能低估: Possibly underestimated
+告警列表: Alert list
+告警卡片: Alert card
+建议动作: Recommended actions
+持续时长: Duration
+起始时间: Start time
+起止时间: Start ~ end
+可能被低估: Possibly underestimated
+需人工核实: Needs manual verification
+按优先级排序: sorted by priority
+（可能低估）: ' (possibly underestimated)'
+（可能被低估）: ' (possibly underestimated)'
+'未评估：上游资产均未扫描': 'Not assessed: no upstream asset scanned'
+（未评估：上游资产均未扫描）: ' (not assessed: no upstream asset scanned)'
+分数 / 阈值: Score / threshold
+参与计算漏洞数: Vulnerabilities counted
+可能的入侵路径: Possible intrusion paths
+告警 {id}: Alert {id}
+已扫描，无漏洞: Scanned, no vulnerabilities
+异常严重度 S: Anomaly severity S
+路径上的资产：: 'Assets on the paths:'
+加权 E_sub: Weighted E_sub
+未扫描（未评估）: Not scanned (not assessed)
+未映射的传感器：: 'Unmapped sensors: '
+推断受影响的子系统: Inferred affected subsystems
+风险 R_asset: Risk R_asset
+占全部传感器误差的比例: Share of total sensor error
+最大异常分数 / 阈值: Max anomaly score / threshold
+未知前缀（不参与加权）: Unknown prefix (excluded from weighting)
+（{ratio} 倍）: ' ({ratio}x)'
+'{ratio} 倍': '{ratio}x'
+优先级 priority: Priority
+加权暴露风险 E_sub: Weighted exposure risk E_sub
+告警列表（按优先级排序）: Alert list (sorted by priority)
+（第 {rank} 名）: ' (rank {rank})'
+OpenVAS 修复建议：: 'OpenVAS remediation advice:'
+Top-{k} 异常传感器: Top-{k} anomalous sensors
+（未评估：{assets}）: ' (not assessed: {assets})'
+优先级第 {rank} / {n}: Priority rank {rank} / {n}
+告警 {id}　优先级第 {rank} / {n}: Alert {id} — priority rank {rank} / {n}
+无（受影响子系统没有挂接控制链）。: None (the affected subsystems have no control chain attached).
+（{asset} {port}）：: ' ({asset} {port}): '
+（另有 {n} 个上游资产未评估）: ' ({n} more upstream assets not assessed)'
+该路径存在未评估资产，实际风险可能被低估: This path contains assets that have not been assessed; the actual risk may be underestimated
+路径资产上没有达到 QoD 阈值的漏洞。: No vulnerabilities on the path assets reach the QoD threshold.
+E_sub 未评估（上游资产均未扫描，按 0 计算）: E_sub not assessed (no upstream asset has been scanned; counted as 0)
+报警是检测模型的原始输出，未经人工确认，其中包含误报。: Alerts are the raw output of the detection model, have not been confirmed by a human, and include false alarms.
+路径资产的高危漏洞（按 r_v 排序，QoD ≥ {q}）: High-risk vulnerabilities on the path assets (sorted by r_v, QoD ≥ {q})
+'"可能低估"：路径上有一部分资产未评估（未扫描），按 0 计算。"未评估"：上游资产均未扫描，E_sub 记为 0。': '"Possibly underestimated": some of the assets on the path have not been assessed (not scanned); they are counted as 0. "Not assessed": no upstream asset has been scanned; E_sub is recorded as 0.'
+排序：按 Priority（未四舍五入的值）降序；Priority 相同时按 S 降序，仍相同时按告警编号升序。: 'Order: by Priority (unrounded value), descending. Alerts with equal Priority are ordered by S, descending, and then by alert ID, ascending.'
+报警来自 mock 数据，分数与时间为虚构值，不是模型输出。: Alerts come from mock data; scores and times are made-up values, not model output.
+'：权重 {weight}，业务关键度 {crit}，暴露风险 ': ': weight {weight}, business criticality {crit}, exposure risk '
+无法识别受影响的子系统（Top-k 传感器前缀均不在资产映射中）。: The affected subsystem cannot be identified (none of the Top-k sensor prefixes is in the asset map).
+需人工核实（命中 KEV 但 QoD < {q}，未参与风险计算）: Needs manual verification (in KEV but QoD < {q}; not included in the risk calculation)
+本告警由 mock 报警生成（{case}），分数与时间为虚构值，不是模型输出。: This alert was generated from a mock alert ({case}); scores and times are made-up values, not model output.
+共 {n} 条报警，本页只列出优先级最高的前 {m} 条（只为这些报警生成了卡片）。: '{n} alerts in total; this page lists only the {m} with the highest priority (cards were generated only for these).'
+生成时间 {time}；α={alpha}，β={beta}，γ={gamma}，min_qod={qod}: Generated at {time}; α={alpha}, β={beta}, γ={gamma}, min_qod={qod}
+生成时间：{time}　参数：α={alpha}，β={beta}，γ={gamma}，min_qod={qod}: 'Generated at: {time}  Parameters: α={alpha}, β={beta}, γ={gamma}, min_qod={qod}'
+以下漏洞命中 CISA KEV，但 QoD < {q}（仅版本比对），未参与风险计算，需人工核实是否真实存在。: The following vulnerabilities are in CISA KEV but have QoD < {q} (version comparison only). They are not included in the risk calculation and need manual verification that they really exist.
+'{n} 分': '{n} min'
+'{n} 秒': '{n} s'
+'{n} 小时': '{n} h'
+'{asset}（R_asset {risk}）': '{asset} (R_asset {risk})'
+优先排查资产：{assets}: 'Investigate these assets first: {assets}'
+按子系统说明排查物理耦合的上游过程: Follow the subsystem note and investigate the physically coupled upstream processes
+受影响子系统无关联资产与漏洞，请结合过程数据人工研判: The affected subsystems have no associated assets or vulnerabilities; assess manually using the process data
+人工核实 {n} 条命中 KEV 但 QoD 偏低的漏洞是否真实存在: Manually verify whether the {n} vulnerabilities that are in KEV but have low QoD really exist
+路径上未评估（未扫描）的资产：{assets}（PLC 不做主动扫描，请结合日志与配置核查）: 'Assets on the path that have not been assessed (not scanned): {assets} (PLCs are not actively scanned; check them using logs and configuration)'
+报警数据: Alert data
+报警来源: Alert source
+来源资产: Source asset
+路径风险: Path risk
+未评估上游: Unassessed upstream
+相对默认参数: vs. default parameters
+融合告警演示: Fusion alert demo
+融合打分参数: Fusion scoring parameters
+资产与子系统: Assets and subsystems
+mock 报警: Mock alerts
+真实报警（LSTM-AE）: Real alerts (LSTM-AE)
+（无控制链：HIL 仿真）: ' (no control chain: HIL simulation)'
+α（暴露风险权重）: α (exposure risk weight)
+γ（KEV 倍数）: γ (KEV multiplier)
+β（EPSS 权重）: β (EPSS weight)
+资产风险 R_asset: Asset risk R_asset
+选择告警（按优先级排序）: Select an alert (sorted by priority)
+子系统暴露风险 E_sub: Subsystem exposure risk E_sub
+过程异常 + 漏洞上下文 融合告警: 'Process anomaly + vulnerability context: fused alerts'
+只影响本页面的计算，不改写 fusion.yaml 和任何输出文件。: Affects only the calculations on this page; fusion.yaml and all output files are left unchanged.
+资产拓扑（python -m scripts.make_extension_report 生成）: Asset topology (generated by python -m scripts.make_extension_report)
+默认读取真实报警（LSTM-AE 在 HAI 测试集上的全部报警段）；mock 报警是手工构造的示例。: Real alerts are read by default (all alarm segments of LSTM-AE on the HAI test set); mock alerts are hand-made examples.
+'"相对默认参数"对比 fusion.yaml 中的参数。': ' "vs. default parameters" compares with the parameters in fusion.yaml.'
+共 {n} 条报警，只列出优先级最高的前 {m} 条（config 的 fusion.max_rendered_alerts）。: '{n} alerts in total; only the {m} with the highest priority are listed (fusion.max_rendered_alerts in the config).'
+真实报警：{model} 在 HAI 21.03 测试集上的全部 {n} 条报警段，是模型的原始输出，未经人工确认，其中包含误报。: 'Real alerts: all {n} alarm segments of {model} on the HAI 21.03 test set. They are the raw output of the model, have not been confirmed by a human, and include false alarms.'
+没有可用的报警文件：先运行 python -m scripts.export_alerts（真实）或 python -m scripts.make_mock_alerts（mock）。: 'No alert file is available: run python -m scripts.export_alerts (real) or python -m scripts.make_mock_alerts (mock) first.'
+密度: Density
+损失: Loss
+时间: Time
+异常分数: Anomaly score
+攻击区间: Attack interval
+漏洞条数: Number of vulnerabilities
+训练曲线: Training curves
+误差占比: Error share
+AUROC: AUROC
+L0 过程: L0 Process
+L1 控制: L1 Control
+L2 监控: L2 Supervisory
+L3 运营: L3 Operations
+事件检出率: Event detection rate
+逐点 F1: Point-wise F1
+已扫描评估: Scanned and assessed
+test 攻击: test attack
+test 正常: test normal
+不参与风险计算: Excluded from the risk calculation
+关键度 {c}: criticality {c}
+E_sub 未评估: E_sub not assessed
+QoD（检测质量）: QoD (quality of detection)
+上限 {pct}%: limit {pct}%
+无控制链（HIL）: no control chain (HIL)
+窗口长度 W（秒）: Window length W (s)
+分数分布（虚线为阈值）: Score distributions (dashed line = threshold)
+（冒烟数据，仅检查流程）: ' (smoke-test data, pipeline check only)'
+保留（QoD ≥ {q}）: Kept (QoD ≥ {q})
+○ = 标签中的受攻击子系统: ○ = attacked subsystem according to the labels
+未扫描（未评估，计算中按 0）: Not scanned (not assessed; counted as 0)
+最好：第 {n} 个 epoch: 'best: epoch {n}'
+'{part}：各模型的逐秒异常分数': '{part}: per-second anomaly score of each model'
+阈值（val_thr 99% 分位）: Threshold (99% quantile of val_thr)
+占 val_thr 重构 MSE 的比例（%）: Share of the reconstruction MSE on val_thr (%)
+'{model}：被检出事件的误差在各子系统的占比': '{model}: error share by subsystem for the detected events'
+资产拓扑与暴露风险（箭头：可下发指令 / 写数据）: 'Asset topology and exposure risk (arrows: can send commands / write data)'
+LSTM-AE 消融（黑框 = 事先固定的主模型配置）: LSTM-AE ablation (black frame = main model configuration fixed in advance)
+漏洞 QoD 分布（共 {n} 条；QoD ≥ {q} 保留 {kept} 条）: QoD distribution of vulnerabilities ({n} in total; {kept} kept with QoD ≥ {q})
+PCA 在 val_thr 上各传感器的误差占比（前 {top} 个，共 {n} 个）: 'PCA: error share of each sensor on val_thr (top {top} of {n})'
+案例: Cases
+放在一起看: Taken together
+'- 告警卡片：': '- Alert card: '
+案例 {k}　: 'Case {k} — '
+高优先级的误报: a high-priority false alarm
+归因正确的真实攻击: a real attack with correct attribution
+归因错误的真实攻击: a real attack with wrong attribution
+没有符合条件的报警。: No alert meets the condition.
+'- 卡片推断的子系统：': '- Subsystems inferred by the card: '
+'- 卡片给出的入侵路径：': '- Intrusion paths given by the card: '
+同一文件中{gaps}。: ' In the same file, {gaps}.'
+'- 路径上没有参与计算的漏洞': '- No vulnerabilities on the path are included in the calculation'
+'**在**事件的子系统集合内，归因命中。': 'which **is** in the event''s subsystem set: the attribution is a hit.'
+'- Top-5 传感器（占全部传感器误差的比例）：': '- Top-5 sensors (share of total sensor error): '
+'{id} {w}（关键度 {c}，E_sub {e}）': '{id} {w} (criticality {c}, E_sub {e})'
+'**对照标签**：这条报警不与任何攻击事件重叠，是误报。': '**Against the labels**: this alert does not overlap any attack event; it is a false alarm.'
+'**不在**事件的子系统集合内，按决策 7 的规则归因未命中。': 'which is **not** in the event''s subsystem set: by the rule of Decision 7 the attribution is a miss.'
+'前一个攻击事件 #{eid} 结束于 {time}（{m} 分钟之前）': 'the previous attack event #{eid} ended at {time} ({m} minutes earlier)'
+'后一个攻击事件 #{eid} 开始于 {time}（{m} 分钟之后）': 'the next attack event #{eid} started at {time} ({m} minutes later)'
+'- 报警时间：{start} ~ {end}（{d} 秒，{file}）': '- Alert time: {start} ~ {end} ({d} s, {file})'
+'- 最大异常分数 {score}，是阈值（{thr}）的 {ratio} 倍': '- Max anomaly score {score}, i.e. {ratio} times the threshold ({thr})'
+'- 融合优先级排名：第 {rank} / {n}（priority {p}，S {s}，E_sub {e}）': '- Fusion priority rank: {rank} / {n} (priority {p}, S {s}, E_sub {e})'
+'- 路径上未评估的资产：{assets}；列出的漏洞 {n} 条（最高的是 {asset} 上的 {name}），需人工核实 {m} 条': '- Assets on the path that have not been assessed: {assets}; {n} vulnerabilities listed (the top one is {name} on {asset}), {m} needing manual verification'
+'- 误报的卡片与真实攻击的卡片在形式上完全一样（同样的入侵路径、漏洞和修复建议）。卡片不能帮助判断一条报警是不是误报，它只是在报警为真的前提下给出排查的起点。': '- The card of the false alarm looks exactly like the cards of the real attacks (the same intrusion paths, vulnerabilities and remediation advice). A card does not help decide whether an alert is a false alarm; it only gives a starting point for investigation on the assumption that the alert is real.'
+资产映射是人为构造的，漏洞数据来自自建靶机的扫描，与 HAI 中的攻击没有因果关系；卡片中的入侵路径和漏洞只说明原型如何把信息组织到一起，不是对这些攻击的溯源结论。: The asset mapping is constructed by hand and the vulnerability data comes from scanning a self-built target machine; neither has any causal relation to the attacks in HAI. The intrusion paths and vulnerabilities on the cards only show how the prototype brings the information together; they are not a conclusion about where these attacks came from.
+'- 案例 2 的 Top-1 落在 P4（HIL 仿真部分，没有子系统标签，按规则必然算未命中）。P4 与 P1、P2、P3 都有物理耦合，指向 P4 不一定是错的，现有标签无法判断；卡片对 P4 附有说明，建议同时排查 P1 / P2 / P3。': '- In Case 2 the Top-1 sensor falls in P4 (the HIL simulation part, which has no subsystem label, so by the rule it always counts as a miss). P4 is physically coupled with P1, P2 and P3, so pointing to P4 is not necessarily wrong; the available labels cannot tell. The card carries a note on P4 and recommends investigating P1 / P2 / P3 as well.'
+'**对照标签**：这条报警与攻击事件 #{eid} 重叠（{start} ~ {end}，{d} 秒，标签中的受攻击子系统 {subs}；该事件的检测延迟 {delay} 秒）。Top-1 传感器 {sensor} 属于 {sub}，': '**Against the labels**: this alert overlaps attack event #{eid} ({start} ~ {end}, {d} s, attacked subsystem according to the labels {subs}; detection delay of this event {delay} s). The Top-1 sensor {sensor} belongs to {sub}, '
+? '- 三张卡片列出的漏洞都来自同一台已扫描的资产（{asset}），排在最前的也是同一条：只有一台靶机被评估，凡是涉及 P1 或 P2 的报警都会得到几乎相同的漏洞上下文，真实攻击和误报之间没有区别。这是单靶机和风险饱和造成的局限（见 PROGRESS.md 的 M9 一节）。'
+: '- The vulnerabilities listed on all three cards come from the same scanned asset ({asset}), and the top entry is the same one: only a single target machine has been assessed, so every alert that involves P1 or P2 receives almost the same vulnerability context, with no difference between real attacks and false alarms. This is a limitation caused by the single target machine and by risk saturation (see the M9 section of PROGRESS.md).'
+? '- 案例 3 的误报（分数是阈值的 {f} 倍）排在案例 2 的真实攻击（{r} 倍）之前。原因是异常严重度 S = min(1, 分数 ÷ 阈值 − 1) 在分数达到阈值的 2 倍时就封顶为 1，两条报警的 S 相同，排序只由子系统的权重、关键度和 E_sub 决定。S 的封顶点太低，是这套打分公式的一个缺陷。'
+: '- The false alarm of Case 3 (score {f} times the threshold) is ranked ahead of the real attack of Case 2 ({r} times). The reason is that the anomaly severity S = min(1, score ÷ threshold − 1) is capped at 1 as soon as the score reaches 2 times the threshold, so both alerts have the same S and the ranking is decided only by subsystem weights, criticality and E_sub. The cap on S is too low; this is a flaw of the scoring formula.'
+? '- 案例 2 的 Top-1 传感器不在受攻击的子系统内，但 Top-5 里其余传感器大多属于受攻击的子系统：卡片按 Top-5 的误差占比加权后，仍把 {share} 的权重放在 {subs} 上，给出的入侵路径也是它的。也就是说"Top-1 是否命中"比卡片实际展示的信息更严格；这只是这一条报警的情况，不能推广。'
+: '- In Case 2 the Top-1 sensor is not in the attacked subsystem, but most of the other Top-5 sensors are: after weighting by the Top-5 error shares the card still puts {share} of the weight on {subs}, and the intrusion paths it gives belong to that subsystem. In other words, "whether Top-1 is a hit" is stricter than the information the card actually shows; this holds for this one alert only and must not be generalised.'
+? 报警来自 LSTM-AE 主模型运行（{model}，种子 {seed}）在 HAI 21.03 测试集上的全部 {n} 条报警段。案例按固定规则挑选，不人工挑选：按融合优先级的排名从前往后，分别取第一条归因正确的真实攻击、第一条归因错误的真实攻击、第一条误报。"是否真实攻击、归因是否命中"来自事后用标签做的评估，卡片上没有这些信息。
+: 'The alerts are all {n} alarm segments of the LSTM-AE main model run ({model}, seed {seed}) on the HAI 21.03 test set. The cases are selected by a fixed rule, not by hand: going down the fusion priority ranking, take the first real attack with correct attribution, the first real attack with wrong attribution, and the first false alarm. "Whether it is a real attack and whether the attribution is a hit" comes from an evaluation done afterwards with the labels; the cards do not contain this information.'
+工程师站: Engineering workstation
+历史服务器: Historian
+锅炉过程: Boiler process
+水处理过程: Water treatment process
+汽轮机过程: Turbine process
+HIL 仿真: HIL simulation
+单子系统（P1）: single subsystem (P1)
+刚过阈值（P3）: just above the threshold (P3)
+跨两个子系统（P2 + P1）: across two subsystems (P2 + P1)
+跨子系统且涉及 P4（HIL）: across subsystems, involving P4 (HIL)
+严重报警（P2，S 截断到 1）: severe alert (P2, S capped at 1)
+'P4 为 HIL 仿真子系统,无独立控制链;它与 P1、P2、P3 都有物理耦合(P3 的泵和阀由 HIL 中的抽水蓄能发电模型控制),其异常可能由 P1/P2/P3 的攻击经物理耦合传导而来,建议同时排查 P1/P2/P3 相关资产。': 'P4 is the HIL simulation subsystem and has no control chain of its own. It is physically coupled with P1, P2 and P3 (the pump and valve of P3 are controlled by the pumped-storage hydropower generation model in the HIL); its anomalies may be caused by attacks on P1/P2/P3 propagating through physical coupling, so the assets related to P1/P2/P3 should be investigated as well.'

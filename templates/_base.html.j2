@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="{{ html_lang() }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{% endblock %}</title>
+<style>
+  :root { --bg:#fff; --fg:#1f2328; --muted:#656d76; --line:#d0d7de; --card:#f6f8fa;
+          --crit:#b42318; --warn:#9a6700; --mock:#6e40c9; --ok:#1a7f37; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d1117; --fg:#e6edf3; --muted:#8d96a0; --line:#30363d; --card:#161b22;
+            --crit:#ff7b72; --warn:#d29922; --mock:#bc8cff; --ok:#3fb950; }
+  }
+  body { background:var(--bg); color:var(--fg); font:15px/1.6 system-ui, "Noto Sans CJK SC", sans-serif;
+         max-width:1100px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.5rem; margin:.2em 0 .6em; } h2 { font-size:1.15rem; border-bottom:1px solid var(--line); padding-bottom:4px; margin-top:1.6em; }
+  table { border-collapse:collapse; width:100%; margin:.5em 0; display:block; overflow-x:auto; }
+  th, td { border:1px solid var(--line); padding:4px 8px; text-align:left; vertical-align:top; }
+  th { background:var(--card); } td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  code { background:var(--card); padding:0 4px; border-radius:4px; }
+  .banner { border:1px solid; border-radius:6px; padding:8px 12px; margin:8px 0; }
+  .mock { color:var(--mock); border-color:var(--mock); font-weight:600; }
+  .disclaimer { color:var(--muted); border-color:var(--line); }
+  .review { color:var(--warn); border-color:var(--warn); }
+  .kev { color:var(--crit); font-weight:600; }
+  .muted { color:var(--muted); }
+  .kpis { display:flex; flex-wrap:wrap; gap:12px; margin:8px 0; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:6px 12px; min-width:120px; }
+  .kpi b { display:block; font-size:1.3rem; }
+  .path { font-family:ui-monospace, monospace; }
+  footer { margin-top:2em; color:var(--muted); font-size:.9em; border-top:1px solid var(--line); padding-top:8px; }
+</style>
+</head>
+<body>
+{% block content %}{% endblock %}
+<footer>{{ disclaimer }}</footer>
+</body>
+</html>

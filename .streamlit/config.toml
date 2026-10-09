@@ -1,0 +1,3 @@
+# Streamlit 界面设置：工具栏只保留最少的项，隐藏 Deploy 按钮（演示截图用）
+[client]
+toolbarMode = "minimal"

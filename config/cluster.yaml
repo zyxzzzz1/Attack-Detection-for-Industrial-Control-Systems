@@ -1,0 +1,73 @@
+# 集群配置：Minerva（Chalmers CSE）。说明见 docs/cluster_notes.md，操作步骤见 docs/cluster_runbook.md。
+# 未知项写 TODO（登录集群后按 runbook 第 1 步查询并补充）。
+# 个人信息（登录用户名、集群上的绝对路径）不写在这里：放在不入库的 config/cluster.local.yaml 中
+# （示例见 config/cluster.local.example.yaml），生成作业脚本时覆盖本文件的同名项。
+# 改动后运行 `python -m scripts.make_cluster_jobs`：按本文件生成 cluster/ 下入库的作业脚本（路径为 TODO，只能用于本地 --smoke），
+# 有 cluster.local.yaml 时另按合并后的配置生成 cluster/local/ 下真实的作业脚本（不入库，由 push_to_cluster.sh 推送到集群）。
+
+cluster:
+  name: minerva
+  scheduler: slurm
+  # ssh 别名，在本地 ~/.ssh/config 中配置（HostName minerva.cse.chalmers.se，User 为 CID）
+  ssh_alias: minerva
+  login_host: minerva.cse.chalmers.se
+  # 只能从 Chalmers 网络或 VPN 访问
+  network: Chalmers 网络或 VPN
+  cid: TODO 写在 config/cluster.local.yaml    # Chalmers CID（登录用户名）
+  os: Ubuntu 24.04
+  python: python3              # 系统 python3 为 3.12
+
+paths:
+  # 集群上的绝对路径：真实值写在 config/cluster.local.yaml（实际布局是 home 下的三个并列目录：代码、数据、产物）
+  code_dir: TODO 写在 config/cluster.local.yaml      # 代码目录（push_to_cluster.sh 的目标）
+  venv_dir: TODO 写在 config/cluster.local.yaml      # 虚拟环境目录，约定为 <code_dir>/.venv
+  data_dir: TODO 写在 config/cluster.local.yaml      # HAI 数据目录（其下直接放 train1.csv.gz 等）→ HAI_DATA_DIR
+  artifact_dir: TODO 写在 config/cluster.local.yaml  # 产物根目录 → ARTIFACT_DIR；slurm 日志在其下的 slurm_logs/
+
+partitions:
+  default:
+    name: short                # 默认分区名
+    max_time: "00:30:00"       # 默认分区时限（短）
+  long:
+    name: long
+    max_time: "1-00:00:00"     # 最长 1 天
+
+gpus:
+  # 本项目一律只申请一块 L4，不写多 GPU 代码
+  L4: {memory_gb: 24, count: 32}
+  L40s: {memory_gb: 48, count: 8}
+
+storage:
+  home_quota: 无用户级配额（quota 无输出）；home 为 /data/users/<CID>，/data 全体共享 59T，2026-10-08 剩 2.8T（已用 96%）  # home 配额
+  scratch: 无单独的 scratch（没有 /scratch、/local，TMPDIR 未设置）；数据和产物都放 /data/users/<CID> 下  # 是否有 scratch、路径与清理策略
+
+network:
+  compute_nodes_internet: true # 计算节点能否上网（决定数据核对是否用 --offline）
+  cuda_driver: 驱动 595.71.05（2026-10-08 读自 /proc/driver/nvidia/version；CUDA 13.0 要求驱动 580 及以上，满足，用 PyPI 默认的 torch wheel）  # 驱动支持的 CUDA 版本（决定 torch 的 CUDA 构建，见 env/README.md）
+
+code_transfer: rsync           # 已确认（2026-10-07）：scripts/push_to_cluster.sh，只推 git 跟踪的文件
+
+jobs:
+  # srun 跑 pytest（集群上的第一个作业）：默认分区，不写 -p
+  pytest: {cpus_per_task: 4, mem: 8G, time: "00:20:00"}
+  # LSTM 类模型（lstm_ae、lstm_vae、deep_svdd）
+  train:
+    partition: long
+    gres: gpu:L4:1
+    cpus_per_task: 4
+    mem: 32G
+    time: "00:10:00"           # LSTM-AE 完整运行实测 80 秒（作业 274401，50 个 epoch，2026-10-08）；×1.5 为 2 分钟，向上取到 10 分钟
+  # PCA 与 IsolationForest：不申请 GPU
+  baselines:
+    partition: long
+    cpus_per_task: 16
+    mem: 64G
+    time: "00:05:00"           # 实测 58 秒（作业 274399，2026-10-08）；×1.5 约 1.5 分钟，向上取到 5 分钟
+  # LSTM-AE 消融：job array，资源同 train
+  ablation:
+    partition: long
+    gres: gpu:L4:1
+    cpus_per_task: 4
+    mem: 32G
+    time: "00:10:00"           # 每个 array 任务的时限。实测最长 4 分 45 秒（任务 8，W=120、hidden=128，作业 274568，2026-10-09）；×1.5 约 7 分钟，向上取到 10 分钟
+    array_concurrency: 3       # 同时运行的 array 任务数（--array=0-8%3 中的 %3）

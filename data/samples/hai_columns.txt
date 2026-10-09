@@ -1,0 +1,100 @@
+# 来源：train1.csv.gz（HAI 21.03 官方仓库 https://github.com/icsdataset/hai）
+# 行数 216001，时间 2020-07-11 00:00:00 ~ 2020-07-13 12:00:00，列数 84
+# 标注：[time] 时间列，[label] 标签列（不作为特征），[P?] 传感器所属子系统
+
+  0  [time]  time
+  1  [P1]  P1_B2004
+  2  [P1]  P1_B2016
+  3  [P1]  P1_B3004
+  4  [P1]  P1_B3005
+  5  [P1]  P1_B4002
+  6  [P1]  P1_B4005
+  7  [P1]  P1_B400B
+  8  [P1]  P1_B4022
+  9  [P1]  P1_FCV01D
+ 10  [P1]  P1_FCV01Z
+ 11  [P1]  P1_FCV02D
+ 12  [P1]  P1_FCV02Z
+ 13  [P1]  P1_FCV03D
+ 14  [P1]  P1_FCV03Z
+ 15  [P1]  P1_FT01
+ 16  [P1]  P1_FT01Z
+ 17  [P1]  P1_FT02
+ 18  [P1]  P1_FT02Z
+ 19  [P1]  P1_FT03
+ 20  [P1]  P1_FT03Z
+ 21  [P1]  P1_LCV01D
+ 22  [P1]  P1_LCV01Z
+ 23  [P1]  P1_LIT01
+ 24  [P1]  P1_PCV01D
+ 25  [P1]  P1_PCV01Z
+ 26  [P1]  P1_PCV02D
+ 27  [P1]  P1_PCV02Z
+ 28  [P1]  P1_PIT01
+ 29  [P1]  P1_PIT02
+ 30  [P1]  P1_PP01AD
+ 31  [P1]  P1_PP01AR
+ 32  [P1]  P1_PP01BD
+ 33  [P1]  P1_PP01BR
+ 34  [P1]  P1_PP02D
+ 35  [P1]  P1_PP02R
+ 36  [P1]  P1_STSP
+ 37  [P1]  P1_TIT01
+ 38  [P1]  P1_TIT02
+ 39  [P2]  P2_24Vdc
+ 40  [P2]  P2_ASD
+ 41  [P2]  P2_AutoGO
+ 42  [P2]  P2_CO_rpm
+ 43  [P2]  P2_Emerg
+ 44  [P2]  P2_HILout
+ 45  [P2]  P2_MSD
+ 46  [P2]  P2_ManualGO
+ 47  [P2]  P2_OnOff
+ 48  [P2]  P2_RTR
+ 49  [P2]  P2_SIT01
+ 50  [P2]  P2_SIT02
+ 51  [P2]  P2_TripEx
+ 52  [P2]  P2_VT01
+ 53  [P2]  P2_VTR01
+ 54  [P2]  P2_VTR02
+ 55  [P2]  P2_VTR03
+ 56  [P2]  P2_VTR04
+ 57  [P2]  P2_VXT02
+ 58  [P2]  P2_VXT03
+ 59  [P2]  P2_VYT02
+ 60  [P2]  P2_VYT03
+ 61  [P3]  P3_FIT01
+ 62  [P3]  P3_LCP01D
+ 63  [P3]  P3_LCV01D
+ 64  [P3]  P3_LH
+ 65  [P3]  P3_LIT01
+ 66  [P3]  P3_LL
+ 67  [P3]  P3_PIT01
+ 68  [P4]  P4_HT_FD
+ 69  [P4]  P4_HT_LD
+ 70  [P4]  P4_HT_PO
+ 71  [P4]  P4_HT_PS
+ 72  [P4]  P4_LD
+ 73  [P4]  P4_ST_FD
+ 74  [P4]  P4_ST_GOV
+ 75  [P4]  P4_ST_LD
+ 76  [P4]  P4_ST_PO
+ 77  [P4]  P4_ST_PS
+ 78  [P4]  P4_ST_PT01
+ 79  [P4]  P4_ST_TT01
+ 80  [label]  attack
+ 81  [label]  attack_P1
+ 82  [label]  attack_P2
+ 83  [label]  attack_P3
+
+# 子系统传感器数
+#   P1: 38
+#   P2: 22
+#   P3: 7
+#   P4: 12
+
+# 标签列取值统计
+#   attack: {'0': 216001}
+#   attack_P1: {'0': 216001}
+#   attack_P2: {'0': 216001}
+#   attack_P3: {'0': 216001}

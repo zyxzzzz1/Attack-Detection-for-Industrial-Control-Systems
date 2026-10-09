@@ -1,0 +1,28 @@
+{% extends "_base.html.j2" %}
+{% block title %}{{ _("告警列表") }}{% endblock %}
+{% block content %}
+<h1>{{ _("告警列表") }} <span class="muted">{{ _("按优先级排序") }}</span></h1>
+{% if meta.is_mock %}
+<div class="banner mock">[MOCK] {{ _("报警来自 mock 数据，分数与时间为虚构值，不是模型输出。") }}</div>
+{% endif %}
+<div class="banner disclaimer">{{ _("免责声明：") }}{{ disclaimer }}</div>
+<p class="muted">{{ _("生成时间 {time}；α={alpha}，β={beta}，γ={gamma}，min_qod={qod}").format(time=meta.generated_at, alpha=meta.params.alpha, beta=meta.params.beta, gamma=meta.params.gamma, qod=meta.params.min_qod) }}</p>
+{% if alerts | length < n_total %}
+<p>{{ _("共 {n} 条报警，本页只列出优先级最高的前 {m} 条（只为这些报警生成了卡片）。").format(n=n_total, m=alerts | length) }}</p>
+{% endif %}
+{% if not meta.is_mock %}
+<p class="muted">{{ _("报警是检测模型的原始输出，未经人工确认，其中包含误报。") }}</p>
+{% endif %}
+<table>
+  <tr><th>{{ _("排名") }}</th><th>{{ _("告警") }}</th><th>{{ _("起始时间") }}</th><th>Priority</th><th>{{ _("分数 / 阈值") }}</th><th>S</th><th>{{ _("子系统") }}</th><th>E_sub</th><th>{{ _("需核实的 KEV 漏洞") }}</th></tr>
+  {% for a in alerts %}
+  <tr><td class="num">{{ a.rank }}</td>
+      <td><a href="{{ card_name(a, 'html') }}">{{ a.alert_id }}</a>{% if a.is_mock is defined and a.is_mock %} <span class="mock">[MOCK]</span>{% endif %}</td>
+      <td>{{ a.start }}</td><td class="num"><b>{{ a.priority | f3 }}</b></td><td class="num">{{ "%.2f" | format(a.max_score / a.threshold) }}</td><td class="num">{{ a.S | f3 }}</td>
+      <td>{% for s in shown_subsystems(a, 1) %}{{ s.id }} {{ s.weight | pct }}{{ _("、") if not loop.last }}{% else %}-{% endfor %}</td>
+      <td class="num">{{ a.E_sub | f3 }}{% if exposure(a) == "not_assessed" %} <span class="review">{{ _("未评估：上游资产均未扫描") }}</span>{% elif exposure(a) == "partial" %} <span class="review">{{ _("可能低估") }}</span>{% endif %}</td><td class="num">{{ a.needs_review | length }}</td></tr>
+  {% endfor %}
+</table>
+<p class="muted">{{ _("排序：按 Priority（未四舍五入的值）降序；Priority 相同时按 S 降序，仍相同时按告警编号升序。") }}</p>
+<p class="muted">{{ _("\"可能低估\"：路径上有一部分资产未评估（未扫描），按 0 计算。\"未评估\"：上游资产均未扫描，E_sub 记为 0。") }}</p>
+{% endblock %}

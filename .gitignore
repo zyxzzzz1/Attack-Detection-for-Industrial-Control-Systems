@@ -1,0 +1,27 @@
+# 虚拟环境与缓存
+.venv/
+__pycache__/
+.pytest_cache/
+
+# HAI 原始数据不入库
+data/raw/
+
+# 威胁情报缓存（KEV/EPSS）不入库
+data/intel/
+
+# 基于 mock 报警生成的派生输出不入库（data/mock/ 本身入库）
+data/processed/enriched_alerts*.json
+reports/extension/e3_compare.md
+reports/cards/
+reports/cards_mock/
+
+# 本机私有的集群配置（用户名、集群上的绝对路径）以及按它生成的真实作业脚本
+config/cluster.local.yaml
+cluster/local/
+
+# push_to_cluster.sh 推送时临时写入的提交号（集群上没有 .git）
+.git_commit
+
+# 主线中间产物（模型、分数、checkpoint）不入库
+artifacts/
+CLAUDE.md

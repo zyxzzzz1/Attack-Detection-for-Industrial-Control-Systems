@@ -1,0 +1,149 @@
+[
+  {
+    "alert_id": "MOCK-001",
+    "start": "2020-07-15 10:02:10",
+    "end": "2020-07-15 10:05:39",
+    "max_score": 0.12675,
+    "threshold": 0.0845,
+    "topk": [
+      {
+        "sensor": "P1_FT03",
+        "share": 0.4
+      },
+      {
+        "sensor": "P1_LIT01",
+        "share": 0.25
+      },
+      {
+        "sensor": "P1_FCV03D",
+        "share": 0.15
+      },
+      {
+        "sensor": "P1_PIT01",
+        "share": 0.12
+      },
+      {
+        "sensor": "P1_TIT01",
+        "share": 0.08
+      }
+    ],
+    "is_mock": true,
+    "mock_case": "单子系统（P1）"
+  },
+  {
+    "alert_id": "MOCK-002",
+    "start": "2020-07-15 14:30:00",
+    "end": "2020-07-15 14:36:59",
+    "max_score": 0.1521,
+    "threshold": 0.0845,
+    "topk": [
+      {
+        "sensor": "P2_SIT01",
+        "share": 0.35
+      },
+      {
+        "sensor": "P2_VT01",
+        "share": 0.2
+      },
+      {
+        "sensor": "P1_PIT01",
+        "share": 0.2
+      },
+      {
+        "sensor": "P1_FT01",
+        "share": 0.15
+      },
+      {
+        "sensor": "P2_CO_rpm",
+        "share": 0.1
+      }
+    ],
+    "is_mock": true,
+    "mock_case": "跨两个子系统（P2 + P1）"
+  },
+  {
+    "alert_id": "MOCK-003",
+    "start": "2020-07-16 03:11:45",
+    "end": "2020-07-16 03:12:04",
+    "max_score": 0.08619,
+    "threshold": 0.0845,
+    "topk": [
+      {
+        "sensor": "P3_LIT01",
+        "share": 0.45
+      },
+      {
+        "sensor": "P3_LCV01D",
+        "share": 0.3
+      },
+      {
+        "sensor": "P3_FIT01",
+        "share": 0.15
+      },
+      {
+        "sensor": "P3_PIT01",
+        "share": 0.1
+      }
+    ],
+    "is_mock": true,
+    "mock_case": "刚过阈值（P3）"
+  },
+  {
+    "alert_id": "MOCK-004",
+    "start": "2020-07-16 09:00:00",
+    "end": "2020-07-16 09:14:59",
+    "max_score": 0.29575,
+    "threshold": 0.0845,
+    "topk": [
+      {
+        "sensor": "P2_SIT02",
+        "share": 0.5
+      },
+      {
+        "sensor": "P2_VXT02",
+        "share": 0.2
+      },
+      {
+        "sensor": "P2_VYT02",
+        "share": 0.15
+      },
+      {
+        "sensor": "P2_SIT01",
+        "share": 0.1
+      },
+      {
+        "sensor": "P2_VT01",
+        "share": 0.05
+      }
+    ],
+    "is_mock": true,
+    "mock_case": "严重报警（P2，S 截断到 1）"
+  },
+  {
+    "alert_id": "MOCK-005",
+    "start": "2020-07-16 17:20:30",
+    "end": "2020-07-16 17:23:29",
+    "max_score": 0.10985,
+    "threshold": 0.0845,
+    "topk": [
+      {
+        "sensor": "P4_ST_PT01",
+        "share": 0.4
+      },
+      {
+        "sensor": "P1_TIT01",
+        "share": 0.25
+      },
+      {
+        "sensor": "P4_ST_TT01",
+        "share": 0.2
+      },
+      {
+        "sensor": "P1_PIT01",
+        "share": 0.15
+      }
+    ],
+    "is_mock": true,
+    "mock_case": "跨子系统且涉及 P4（HIL）"
+  }
+]

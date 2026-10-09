@@ -1,0 +1,313 @@
+{
+  "model": "lstm_ae",
+  "run_name": "ablation/lstm_ae_w120_h64",
+  "smoke": false,
+  "status": "completed",
+  "started_at": "2026-10-09T13:36:22+02:00",
+  "finished_at": "2026-10-09T13:38:41+02:00",
+  "git_commit": "64ede38b254561686edcb3fe4b126eb15c2d9a90",
+  "git_dirty": false,
+  "git_source": ".git_commit",
+  "config_hash": "94585fabde43aad11241d37f3ec3465b94e0ca8e1747c4fa8a914fe557209ae5",
+  "overrides": [
+    "ml.window.length=120",
+    "ml.models.lstm_ae.hidden=64"
+  ],
+  "hyperparameters": {
+    "seed": 42,
+    "data_dir": "data/raw/hai-21.03",
+    "artifact_dir": "artifacts",
+    "report_dir": "reports/main",
+    "hai": {
+      "version": "21.03",
+      "train_files": [
+        "train1.csv.gz",
+        "train2.csv.gz",
+        "train3.csv.gz"
+      ],
+      "test_files": [
+        "test1.csv.gz",
+        "test2.csv.gz",
+        "test3.csv.gz",
+        "test4.csv.gz",
+        "test5.csv.gz"
+      ],
+      "time_col": "time",
+      "label_cols": [
+        "attack",
+        "attack_P1",
+        "attack_P2",
+        "attack_P3"
+      ],
+      "api_url": "https://api.github.com/repos/icsdataset/hai/contents/hai-21.03",
+      "raw_url": "https://raw.githubusercontent.com/icsdataset/hai/master/hai-21.03",
+      "manifest": "download_manifest.json",
+      "columns_txt": "data/samples/hai_columns.txt"
+    },
+    "data": {
+      "val_fraction": 0.2,
+      "val_es_fraction": 0.5,
+      "drop_train_overlap": true,
+      "train_overlap_drops": [
+        {
+          "file": "train1.csv.gz",
+          "head_rows": 1,
+          "tail_rows": 43201
+        }
+      ]
+    },
+    "window": {
+      "length": 120,
+      "train_stride": 10,
+      "eval_stride": 1
+    },
+    "train": {
+      "optimizer": "adam",
+      "lr": 0.001,
+      "batch_size": 256,
+      "max_epochs": 50,
+      "patience": 5,
+      "eval_batch_size": 1024
+    },
+    "threshold": {
+      "quantile": 0.99,
+      "sensitivity_quantiles": [
+        0.99,
+        0.995,
+        0.999
+      ]
+    },
+    "eval": {
+      "merge_gap_s": 0
+    },
+    "diagnosis": {
+      "model": "pca",
+      "max_sensor_share": 0.3,
+      "allow_over_limit": false
+    },
+    "attribution": {
+      "top_k": [
+        3,
+        5
+      ],
+      "models": [
+        "lstm_ae",
+        "lstm_vae",
+        "pca"
+      ]
+    },
+    "alerts": {
+      "model": "lstm_ae",
+      "top_k": 5,
+      "output": "data/processed/alerts.json"
+    },
+    "collapse": {
+      "min_score_cv": 0.001
+    },
+    "models": {
+      "pca": {
+        "input": "per_second",
+        "variance": 0.95
+      },
+      "iforest": {
+        "n_estimators": 100,
+        "max_samples": 256,
+        "max_train_windows": null,
+        "feature_batch": 4096
+      },
+      "lstm_ae": {
+        "hidden": 64,
+        "layers": 1
+      },
+      "lstm_vae": {
+        "hidden": 64,
+        "layers": 1,
+        "latent": 32,
+        "beta": 1.0
+      },
+      "deep_svdd": {
+        "hidden": 64,
+        "layers": 1,
+        "rep_dim": 32,
+        "eps": 0.1
+      }
+    },
+    "runtime": {
+      "num_workers": 0
+    },
+    "smoke": {
+      "fraction": 0.01,
+      "max_epochs": 1,
+      "artifact_subdir": "smoke",
+      "report_subdir": "smoke_reports",
+      "extra_test_clips": [
+        {
+          "file": "test1.csv.gz",
+          "start_row": 1511,
+          "rows": 1392
+        }
+      ]
+    },
+    "ablation": {
+      "model": "lstm_ae",
+      "windows": [
+        30,
+        60,
+        120
+      ],
+      "hiddens": [
+        32,
+        64,
+        128
+      ],
+      "window_key": "ml.window.length",
+      "hidden_key": "ml.models.lstm_ae.hidden"
+    }
+  },
+  "seed": 42,
+  "hostname": "<cluster-node>",
+  "python": "3.12.3",
+  "versions": {
+    "torch": "2.14.1+cu130",
+    "sklearn": "1.7.2",
+    "numpy": "2.2.6",
+    "pandas": "2.3.3"
+  },
+  "device": "cuda:0",
+  "device_name": "NVIDIA L4",
+  "cuda_version": "13.0",
+  "gpu_nvidia_smi": [
+    "NVIDIA L4, 23034 MiB, 595.71.05",
+    "NVIDIA L4, 23034 MiB, 595.71.05",
+    "NVIDIA L4, 23034 MiB, 595.71.05",
+    "NVIDIA L4, 23034 MiB, 595.71.05",
+    "NVIDIA L4, 23034 MiB, 595.71.05",
+    "NVIDIA L4, 23034 MiB, 595.71.05",
+    "NVIDIA L4, 23034 MiB, 595.71.05",
+    "NVIDIA L4, 23034 MiB, 595.71.05"
+  ],
+  "cpus_available": 4,
+  "slurm": {
+    "job_id": "274576",
+    "array_job_id": "274568",
+    "array_task_id": "7",
+    "job_name": "hai-ablation",
+    "partition": "long",
+    "node": "<cluster-node>",
+    "cpus_per_task": "4"
+  },
+  "slurm_job_id": "274576",
+  "slurm_array_task_id": "7",
+  "node": "<cluster-node>",
+  "final_epoch": 50,
+  "early_stop_epoch": null,
+  "stages": {
+    "prepare": {
+      "seconds": 5.44,
+      "rows": {
+        "train": 702721,
+        "val_es": 87840,
+        "val_thr": 87840
+      },
+      "n_features": 57,
+      "windows": {
+        "train": 70238,
+        "val_es": 87721,
+        "val_thr": 87721
+      },
+      "finished_at": "2026-10-09T13:36:28+02:00"
+    },
+    "train": {
+      "seconds": 124.15,
+      "resumed": false,
+      "final_epoch": 50,
+      "best_epoch": 46,
+      "best_val_es_loss": 0.15459743026752326,
+      "early_stop_epoch": null,
+      "epoch_seconds_mean": 2.4375999999999998,
+      "epoch_seconds_max": 2.7,
+      "n_parameters": 68473,
+      "device": "cuda:0",
+      "finished_at": "2026-10-09T13:38:32+02:00"
+    },
+    "diagnose": {
+      "seconds": 1.32,
+      "skipped": false,
+      "top_sensor": "P2_24Vdc",
+      "top_share": 0.09824044949055885,
+      "top5": {
+        "P2_24Vdc": 0.0982,
+        "P4_ST_FD": 0.0938,
+        "P2_VT01": 0.0933,
+        "P2_HILout": 0.087,
+        "P2_VYT02": 0.0866
+      },
+      "max_sensor_share": 0.3,
+      "over_limit": false,
+      "gated": false,
+      "finished_at": "2026-10-09T13:38:33+02:00"
+    },
+    "score": {
+      "seconds": 6.58,
+      "val_thr_seconds": 87840,
+      "val_thr_unscored": 119,
+      "test_seconds": 402005,
+      "test_unscored": 595,
+      "has_per_sensor_err": true,
+      "finished_at": "2026-10-09T13:38:40+02:00"
+    },
+    "threshold": {
+      "seconds": 0.01,
+      "threshold": 0.3279565453529363,
+      "quantile": 0.99,
+      "n_scored": 87721,
+      "n_unscored": 119,
+      "score_cv": 0.27677858370300557,
+      "collapsed": false,
+      "finished_at": "2026-10-09T13:38:40+02:00"
+    },
+    "evaluate": {
+      "seconds": 1.77,
+      "model": "lstm_ae",
+      "precision": 0.5022345179825495,
+      "recall": 0.7913267016877166,
+      "f1": 0.6144766533587919,
+      "auroc": 0.946215058981279,
+      "event_recall": 0.96,
+      "delay_median_s": 14.0,
+      "delay_mean_s": 26.604166666666668,
+      "false_alarms_per_hour": 0.513678996491389,
+      "threshold": 0.3279565453529363,
+      "n_unscored": 595,
+      "finished_at": "2026-10-09T13:38:41+02:00"
+    }
+  },
+  "segments": [
+    {
+      "started_at": "2026-10-09T13:36:22+02:00",
+      "finished_at": "2026-10-09T13:38:41+02:00",
+      "status": "completed",
+      "hostname": "<cluster-node>",
+      "device_name": "NVIDIA L4",
+      "slurm": {
+        "job_id": "274576",
+        "array_job_id": "274568",
+        "array_task_id": "7",
+        "job_name": "hai-ablation",
+        "partition": "long",
+        "node": "<cluster-node>",
+        "cpus_per_task": "4"
+      },
+      "git_commit": "64ede38b254561686edcb3fe4b126eb15c2d9a90",
+      "argv": [
+        "--ablation-index",
+        "7",
+        "--resume"
+      ]
+    }
+  ],
+  "torch_threads": 4,
+  "num_workers": 0,
+  "local_diagnostic": false,
+  "best_epoch": 46
+}

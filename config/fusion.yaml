@@ -1,0 +1,16 @@
+# 融合打分参数（claude.md 第 7 节 M9）。
+
+# 单条漏洞风险 r_v = min(1, (cvss/10) × (1 + beta·epss) × (gamma if in_kev else 1))
+beta: 1.0
+gamma: 1.5
+
+# 告警优先级 priority = S × Σ_sub w_sub·(1 + alpha·E_sub)·criticality_sub
+alpha: 1.0
+
+# 最低检测质量（QoD，0~100）：低于此值的漏洞不参与风险计算。
+# parse_report 不做 QoD 过滤，vulns.json 保留全部结果及其 qod 字段。
+# 低于此值但命中 KEV 的漏洞单独列入 needs_review（告警卡片显示"需人工核实"）。
+min_qod: 70
+
+# 每条告警附带的路径资产漏洞条数上限（按 r_v 降序）
+max_vulns_per_alert: 10
