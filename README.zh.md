@@ -2,6 +2,8 @@
 
 [English](README.md) | **中文**
 
+**状态：代码和实验已完成；书面报告撰写中。**
+
 > 资产映射与漏洞数据来自实验环境，仅用于演示。资产映射是人为构造的，漏洞数据来自自建靶机扫描，
 > 与 HAI 中的攻击没有因果关系；融合部分不声称提升检测指标，只作为原型演示与案例研究。
 
@@ -44,9 +46,13 @@ OpenVAS 使用 Greenbone Community Containers（Docker Compose），gvmd socket 
 | deep_svdd | 0.168 | 0.829 | 0.280 | 0.906 | 49/50 | 69.3 |
 
 - LSTM-AE 一行是 5 个随机种子的均值（F1、AUROC、误报率带样本标准差）；其余模型只有单个种子。
-- LSTM-AE 的 AUROC 和事件检出最高；逐点 F1 与 IsolationForest 的差距在随机波动范围内，不能说哪个更好；它的误报段数高于 PCA 和 IsolationForest。
+- LSTM-AE 的 AUROC 和事件检出最高；它的误报段数高于 PCA 和 IsolationForest。
+- 对事先固定的主配置（W=60、hidden=64），LSTM-AE 的逐点 F1 与 IsolationForest 的差距在随机波动范围内，无法区分哪个更好。
+  这个结论只针对主配置：消融中其他 LSTM-AE 配置的 F1 差别很大（见下），每个配置只有单个种子，也没有据此选模型。
 - LSTM-VAE 和 Deep SVDD 明显不如 LSTM-AE。所有模型在 test 上的报警比例都高于验证集上的 1%（阈值迁移不好，推测是正常工况漂移）。
 - 消融（W × hidden，9 个组合）：结果对配置很敏感且不单调，F1 在 0.08~0.62 之间；事先固定的主模型配置（W=60、hidden=64）按 F1 排第 5，没有据此修改。
+- 消融中 AUROC 稳定（0.899–0.946），而 F1（0.084–0.617）和误报率（0.33–74.66 次/小时）变化极大：这说明基于阈值的指标主要受阈值迁移和分布漂移影响，
+  而不是模型区分攻击与正常数据的能力。需要注意：消融的每个配置只有单个种子；这一解读是事后分析，不是经过检验的假设。
 
 **归因**（Top-1 传感器所属子系统是否在事件的子系统集合内；方括号为 95% Wilson 置信区间）
 
@@ -86,7 +92,9 @@ scripts/pull_artifacts.sh
 
 主线的硬性约束：只用 train1~3 训练；test 只在最终评估时读取，不用于调参、选阈值、选模型或早停；scaler 只在训练部分 fit；
 滑窗不跨越文件边界和切分点；标签只在 `src/eval/labels.py`、`src/evaluate.py`、`src/attribution.py` 中读取（有自动测试检查）。
-官方发布的 train1 末尾 43,201 秒与 test3 开头是同一份数据，已从训练集删除（见 `reports/main/data_summary.md`）。
+官方发布的 train1 末尾 43,201 秒与 test3 开头是同一份数据，已从训练集删除；不删除可能低估 test3 上的误报（未实测）
+（见 `reports/main/data_summary.md`，英文说明见 `reports/main/data_overlap.md`）。
+各文档中引用的"约束 N""决策 N"的编号和内容见 [`docs/design_decisions.md`](docs/design_decisions.md)（英文）。
 
 ## 扩展部分：快速开始
 
@@ -195,4 +203,34 @@ app/              Streamlit 演示
 scripts/          扫描、检查、mock 生成、报告素材、前后对比
 reports/extension/  报告素材（真实数据，入库）；reports/cards/、reports/cards_mock/ 可由流水线重新生成，不入库
 docs/             集群说明与操作步骤（cluster_notes、cluster_runbook、cluster_queue）；hmi_main 搭建说明（未来工作）
+```
+
+## 说明
+
+- **提交号**：`run_manifest.json` 和 `PROGRESS.md` 中的提交号来自私有开发仓库，在本公开仓库的历史中不存在。
+- **AI 辅助开发**：本项目在 AI 辅助下开发（Claude Code），`docs/cluster_queue.md` 和 `docs/cluster_runbook.md` 中提到了这一工作方式。
+  研究设计、评估方法和结论均出自本人。
+
+## 引用
+
+本项目使用 HAI 21.03 数据集。[HAI 官方仓库](https://github.com/icsdataset/hai)要求使用 HAI 21.03 的工作引用以下文献
+（BibTeX 取自其 README，省略了 abstract 字段）：
+
+```bibtex
+@inproceedings{10.1145/3474718.3474719,
+    author = {Shin,  Hyeok-Ki and Lee, Woomyo and Yun, Jeong-Han and Min, Byung-Gi},
+    title = {Two ICS Security Datasets and Anomaly Detection Contest on the HIL-Based Augmented ICS Testbed},
+    year = {2021},
+    isbn = {9781450390651},
+    publisher = {Association for Computing Machinery},
+    address = {New York, NY, USA},
+    url = {https://doi.org/10.1145/3474718.3474719},
+    doi = {10.1145/3474718.3474719},
+    booktitle = {Cyber Security Experimentation and Test Workshop},
+    pages = {36–40},
+    numpages = {5},
+    keywords = {security dataset, testbed, artificial intelligence, hardware-in-the-loop, industrial control system, anomaly detection},
+    location = {Virtual, CA, USA},
+    series = {CSET '21}
+}
 ```

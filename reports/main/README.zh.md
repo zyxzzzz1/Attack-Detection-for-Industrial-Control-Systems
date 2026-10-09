@@ -33,6 +33,9 @@
 图表、`cases.md` 和案例卡片按 `config.yaml` 的 `ui.lang` 生成（默认 en，可改为 zh 后重新运行上面的命令得到中文版）；
 `key_numbers.md`、`data_overlap.md` 和 `README.md` 是英文（前者另有中文版 `key_numbers.zh.md`）；各张表和其余 Markdown 文档是中文。显示语言不影响任何数值。
 
+这些文件中引用的约束和决策编号（如"约束 7""决策 6b"，或写作"CLAUDE.md 约束 …"）的内容见
+[`docs/design_decisions.md`](../../docs/design_decisions.md)（英文）。
+
 ## 读这些结果时要注意
 
 - 逐点 F1 偏低是不使用 point-adjust 的预期结果，评估方法没有为提高指标而改动。

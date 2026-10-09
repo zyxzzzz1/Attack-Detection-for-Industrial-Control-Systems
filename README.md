@@ -2,6 +2,8 @@
 
 **English** | [中文](README.zh.md)
 
+**Status: code and experiments complete; written report in progress.**
+
 > Asset mapping and vulnerability data come from a lab environment and are for demonstration only.
 
 Unsupervised attack detection on the HAI 21.03 industrial control dataset with an LSTM autoencoder trained on normal
@@ -55,9 +57,11 @@ Conventions for every detection metric:
 
 - The 5-seed row is the main LSTM-AE configuration (W=60, hidden=64) with seeds 42–46, reported as mean ± sample
   standard deviation (ddof=1). Every other row is a single seed (42).
-- LSTM-AE has the highest AUROC and event detection. Its point-wise F1 is not distinguishable from IsolationForest:
-  0.4290 vs 0.4460, a difference of 0.0170 = 0.93 standard deviations, and 1 of the 5 seeds is above IsolationForest.
-  The seed variation of IsolationForest itself was not measured.
+- LSTM-AE has the highest AUROC and event detection. For the main configuration fixed in advance (W=60, hidden=64),
+  its point-wise F1 cannot be distinguished from IsolationForest: 0.4290 vs 0.4460, a difference of 0.0170 = 0.93
+  standard deviations, and 1 of the 5 seeds is above IsolationForest. The seed variation of IsolationForest itself was
+  not measured. This statement applies to that configuration only. Other LSTM-AE configurations in the ablation give
+  very different F1 values (see below), each from a single seed, and none was used to select a model.
 - LSTM-AE raises more false-alarm segments than PCA and IsolationForest.
 - Ablation over 9 combinations (W ∈ {30, 60, 120} × hidden ∈ {32, 64, 128}, single seed): F1 0.084–0.617, AUROC
   0.899–0.946, false alarms 0.33–74.66 per hour. The best is W=60, hidden=32 (F1 0.617) and the worst is W=60,
@@ -90,7 +94,7 @@ with α=0, and by fused priority with α=1 all give precision@10 = 10/10, precis
 1. **train1 and test3 overlap in the official release.** The last 43,201 seconds of train1 and the first 43,201
    seconds of test3 are the same data, row for row across all 79 sensors, with no attack in it. In addition, the first
    row of train1 equals the last row of test2. Both were removed from the training set and the test files were left as
-   released. Leaving the overlap in would understate false alarms on test3. See
+   released. Leaving the overlap in could understate false alarms on test3 (not measured). See
    [`reports/main/data_overlap.md`](reports/main/data_overlap.md).
 2. **Thresholds do not transfer from validation to test.** By construction 1% of `val_thr` seconds exceed the
    threshold. On test the share is 19.8% for pca, 2.6% for iforest, 6.5% for lstm_ae, 29.8% for lstm_vae and 11.0% for
@@ -103,6 +107,11 @@ with α=0, and by fused priority with α=1 all give precision@10 = 10/10, precis
    alarm segments.
 4. **Fusion ranking gives no measurable improvement.** The three rankings have identical precision@k. The ranking
    quality comes from the anomaly score, not from the vulnerability context.
+5. **Threshold-based metrics vary far more across the ablation than AUROC does.** Over the 9 LSTM-AE configurations,
+   AUROC stays within 0.899–0.946, while F1 ranges over 0.084–0.617 and false alarms over 0.33–74.66 per hour. This
+   suggests that the threshold-based metrics are driven mainly by threshold transfer and distribution drift (finding
+   2), not by how well the model separates attack from normal data. Two caveats: each ablation configuration is a
+   single seed, and this reading is a post-hoc interpretation, not a tested hypothesis.
 
 ## Repository structure
 
@@ -126,7 +135,7 @@ data/mock/          mock alarms
 data/processed/     alerts.json (real LSTM-AE alarms), vulns.json, vulns_enriched.json
 reports/main/       main-line tables, figures and run snapshots; index in reports/main/README.md
 reports/extension/  extension figures and tables
-docs/               cluster notes, runbook and job queue
+docs/               design constraints and decisions, cluster notes, runbook and job queue
 PROGRESS.md         development log
 ```
 
@@ -203,6 +212,10 @@ scripts/pull_artifacts.sh
 - Labels are read only in `src/eval/labels.py`, `src/evaluate.py` and `src/attribution.py`; an automated test checks
   this.
 
+The full list of numbered constraints and decisions is in [`docs/design_decisions.md`](docs/design_decisions.md).
+Wherever a document in this repository cites "constraint N" or "decision N" (约束 N, 决策 N), the number refers to that
+list.
+
 ## Data
 
 This repository does not distribute the HAI raw data. Download HAI 21.03 (train1–3, test1–5) from the official
@@ -258,4 +271,29 @@ OpenVAS was run only against self-built virtual machines on an isolated host-onl
   in Chinese. The Streamlit app, alert cards, case study and figures are in English by default (`ui.lang` in
   `config/config.yaml`; set `UI_LANG=zh` for Chinese). The display language changes text only, never a number.
 - **AI-assisted development.** This project was developed with AI assistance (Claude Code). `docs/cluster_queue.md`
-  and `docs/cluster_runbook.md` refer to this workflow.
+  and `docs/cluster_runbook.md` refer to this workflow. Research design, evaluation methodology and conclusions are my
+  own.
+
+## Citation
+
+This project uses the HAI 21.03 dataset. The [official HAI repository](https://github.com/icsdataset/hai) asks that
+work using HAI 21.03 cite the following (BibTeX as given in its README, with the abstract field omitted):
+
+```bibtex
+@inproceedings{10.1145/3474718.3474719,
+    author = {Shin,  Hyeok-Ki and Lee, Woomyo and Yun, Jeong-Han and Min, Byung-Gi},
+    title = {Two ICS Security Datasets and Anomaly Detection Contest on the HIL-Based Augmented ICS Testbed},
+    year = {2021},
+    isbn = {9781450390651},
+    publisher = {Association for Computing Machinery},
+    address = {New York, NY, USA},
+    url = {https://doi.org/10.1145/3474718.3474719},
+    doi = {10.1145/3474718.3474719},
+    booktitle = {Cyber Security Experimentation and Test Workshop},
+    pages = {36–40},
+    numpages = {5},
+    keywords = {security dataset, testbed, artificial intelligence, hardware-in-the-loop, industrial control system, anomaly detection},
+    location = {Virtual, CA, USA},
+    series = {CSET '21}
+}
+```

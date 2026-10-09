@@ -37,6 +37,10 @@ Language: `README.md`, `key_numbers.md` and `data_overlap.md` are in English. Fi
 follow `ui.lang` in `config.yaml` (default `en`; set it to `zh` and rerun the commands above for Chinese). The other
 tables and Markdown documents are in Chinese. The display language does not affect any number.
 
+Constraint and decision numbers cited in these files (for example "constraint 7", "decision 6b") are listed with
+their content in [`docs/design_decisions.md`](../../docs/design_decisions.md). Where a file says "CLAUDE.md", it means
+that list.
+
 ## Notes for reading these results
 
 - The low point-wise F1 is the expected result of not using point-adjust. The evaluation method was not changed to

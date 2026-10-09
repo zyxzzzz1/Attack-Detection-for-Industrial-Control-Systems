@@ -48,7 +48,7 @@ One row is one second.
 ## Effect on evaluation
 
 - Without the removal, the first 12 hours of test3 would be normal data the model had already seen in training.
-  Reconstruction error there would be lower than on unseen data, and the false alarm rate on test3 would be understated.
+  Reconstruction error there could be lower than on unseen data, and the false alarm rate on test3 could be understated.
 - The size of this effect was not measured: no model was trained with the overlap left in.
 - The affected rows contain no attack, so the removal does not change which attacks are evaluated. All 402,005 test
   seconds and all 50 attack events are still evaluated.

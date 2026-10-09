@@ -3,7 +3,8 @@
 > 状态：草稿，只写方法。数据规模类的数字来自 `reports/main/data_summary.md`（对原始数据的描述性统计）；
 > 检测、消融、归因的结果属于"实验"一章，数字和来源文件汇总在 `reports/main/key_numbers.zh.md`（英文版为 `key_numbers.md`）。
 > 原先标【待填】的位置已于 2026-10-09 按集群完整运行的结果补上（只补与方法有关的事实，不展开结果）。
-> 内容以 `CLAUDE.md` 的"硬性约束"和"主线补充决策"为准，两者不一致时以 `CLAUDE.md` 为准并修改本文。
+> 内容以 `CLAUDE.md` 的"硬性约束"和"主线补充决策"为准，两者不一致时以 `CLAUDE.md` 为准并修改本文
+> （`CLAUDE.md` 不在公开仓库中，其约束和决策的内容见 `docs/design_decisions.md`）。
 
 ## 1 数据
 
