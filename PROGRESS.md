@@ -30,7 +30,7 @@
 
 ## 关键数字（主线）
 
-写报告时直接引用。数字由 `python -m scripts.make_key_numbers` 从来源文件读出（本节是 `reports/main/key_numbers.md` 的副本）；检测、消融、归因的数字全部来自集群上的完整运行（git_dirty=false），冒烟测试的数字没有进入这里。
+写报告时直接引用。数字由 `python -m scripts.make_key_numbers` 从来源文件读出（本节是 `reports/main/key_numbers.zh.md` 的副本）；检测、消融、归因的数字全部来自集群上的完整运行（git_dirty=false），冒烟测试的数字没有进入这里。
 来源文件全部入库：`reports/main/runs/` 是各次集群运行的小文件（指标、manifest、阈值、预处理摘要、训练记录）的副本，由本脚本从产物目录复制，主机名等集群信息已替换为占位符。
 
 ### 检测

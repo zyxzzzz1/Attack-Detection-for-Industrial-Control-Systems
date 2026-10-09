@@ -468,9 +468,9 @@ def test_case_rules_and_observations():
 # ---------- R1：关键数字 ----------
 
 def test_key_numbers_match_source_tables_and_progress_copy():
-    """key_numbers.md 里的检测数字与主表一致；PROGRESS.md 顶部的关键数字是它的原样副本（两处不许各写各的）。"""
+    """key_numbers.zh.md 里的检测数字与主表一致；PROGRESS.md 顶部的关键数字是它的原样副本（两处不许各写各的）。"""
     report = ROOT / load_config()["ml"]["report_dir"]
-    text = (report / "key_numbers.md").read_text(encoding="utf-8")
+    text = (report / "key_numbers.zh.md").read_text(encoding="utf-8")
     main = pd.read_csv(report / "main_results.csv")
     for row in main.itertuples():
         assert f"{row.model}：precision {row.precision:.4f}，recall {row.recall:.4f}，F1 {row.f1:.4f}，AUROC {row.auroc:.4f}" in text
@@ -485,6 +485,50 @@ def test_key_numbers_match_source_tables_and_progress_copy():
         assert group in text
     assert "不使用 point-adjust" in text and "事后分析，不替换主结果" in text
     assert text in (ROOT / "PROGRESS.md").read_text(encoding="utf-8")
+
+
+def test_key_numbers_english_matches_source_files_and_chinese_version():
+    """英文版 key_numbers.md：数字与来源文件一致；与中文版逐行对应，每一行里的数字完全相同；不夹带中文。"""
+    import re
+    report = ROOT / load_config()["ml"]["report_dir"]
+    en = (report / "key_numbers.md").read_text(encoding="utf-8")
+    zh = (report / "key_numbers.zh.md").read_text(encoding="utf-8")
+
+    # 与来源文件一致：主表、种子表、归因汇总、融合排序、各次运行的评估结果
+    main = pd.read_csv(report / "main_results.csv")
+    for row in main.itertuples():
+        ev = json.loads((report / "runs" / row.model / "eval_metrics.json").read_text(encoding="utf-8"))["event"]
+        assert (f"{row.model}: precision {row.precision:.4f}, recall {row.recall:.4f}, F1 {row.f1:.4f}, AUROC {row.auroc:.4f}; "
+                f"events {ev['n_detected']}/{ev['n_events']}; median delay {row.delay_median_s:.0f} s; "
+                f"false alarms {row.false_alarms_per_hour:.2f} per hour ({ev['n_false_alarm_segments']} segments)") in en
+    seeds = pd.read_csv(report / "main_results_seeds.csv").set_index("seed")
+    for col, digits in (("f1", 4), ("auroc", 4), ("event_recall", 4), ("precision", 4), ("recall", 4), ("false_alarms_per_hour", 2)):
+        assert f"{seeds.loc['mean', col]:.{digits}f} ± {seeds.loc['std', col]:.{digits}f}" in en
+    for m, s in pd.read_csv(report / "attribution_summary.csv").set_index("model").iterrows():
+        assert (f"{m}: alarm segments {int(s.n_hit)}/{int(s.n_evaluable)} = {s.subsystem_hit_rate:.3f} "
+                f"[{s.subsystem_hit_rate_ci_low:.3f}, {s.subsystem_hit_rate_ci_high:.3f}]; events, first segment "
+                f"{int(s.n_events_first_hit)}/{int(s.n_events_first_evaluable)} = {s.event_first_hit_rate:.3f} "
+                f"[{s.event_first_hit_rate_ci_low:.3f}, {s.event_first_hit_rate_ci_high:.3f}]") in en
+    aseed = pd.read_csv(report / "attribution_seeds.csv").set_index("seed")
+    assert f"{aseed.loc['mean', 'subsystem_hit_rate']:.3f} ± {aseed.loc['std', 'subsystem_hit_rate']:.3f}" in en
+    for name, g in pd.read_csv(report / "fusion_ranking_eval.csv").groupby("ranking", sort=False):
+        assert f"Ranking {name}: " + ", ".join(f"precision@{int(r.k)} = {int(r.n_true)}/{int(r.k)}" for r in g.itertuples()) in en
+    abl = pd.read_csv(report / "ablation.csv")
+    assert f"F1 {abl.f1.min():.3f}–{abl.f1.max():.3f}, AUROC {abl.auroc.min():.3f}–{abl.auroc.max():.3f}" in en
+
+    # 与中文版逐行对应：同一行的数字（含文件名、配置名里的数字）作为多重集合完全相同
+    number = re.compile(r"\d+(?:[.,]\d+)*")
+    en_lines, zh_lines = en.splitlines(), zh.splitlines()
+    assert len(en_lines) == len(zh_lines)
+    rows = [(a, b) for a, b in zip(en_lines, zh_lines) if a.startswith("| ") or b.startswith("| ")]
+    assert len(rows) > 40
+    for a, b in rows:
+        assert sorted(number.findall(a)) == sorted(number.findall(b)), a
+
+    for group in ("### Detection", "### Attribution", "### Fusion", "### Data issues"):
+        assert group in en
+    assert "No point-adjust" in en and "Post-hoc analysis, does not replace the main results" in en
+    assert not re.search(r"[\u4e00-\u9fff，；：（）、]", en)
 
 
 # ---------- R1：各次运行的入库副本（reports/main/runs/） ----------
@@ -504,7 +548,8 @@ def test_run_snapshots_are_official_and_key_numbers_reproducible():
     for name in names:
         assert report_problem(runs / name) is None, name
         assert (runs / name / "eval_metrics.json").exists() and (runs / name / "threshold.json").exists()
-    assert make_key_numbers.build(cfg) == (ROOT / cfg["ml"]["report_dir"] / "key_numbers.md").read_text(encoding="utf-8")
+    for lang, name in make_key_numbers.OUTPUTS.items():
+        assert make_key_numbers.build(cfg, lang) == (ROOT / cfg["ml"]["report_dir"] / name).read_text(encoding="utf-8")
     assert not [p for p in runs.rglob("*") if p.is_file() and p.name not in snapshot_runs.FILES]  # 不带大文件和日志
 
 

@@ -26,3 +26,4 @@ cluster/local/
 artifacts/
 CLAUDE.md
 CLAUDE.md
+.claude/

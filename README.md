@@ -1,79 +1,191 @@
-# 面向工控系统的"过程异常检测 + 漏洞上下文"融合告警原型
+# Process Anomaly Detection + Vulnerability Context: a Fused Alerting Prototype for Industrial Control Systems
 
-> 资产映射与漏洞数据来自实验环境，仅用于演示。资产映射是人为构造的，漏洞数据来自自建靶机扫描，
-> 与 HAI 中的攻击没有因果关系；融合部分不声称提升检测指标，只作为原型演示与案例研究。
+**English** | [中文](README.zh.md)
 
-- **主线**：在 HAI 21.03 上只用正常数据训练 LSTM 自编码器，做无监督攻击检测，与 4 个对比模型比较，并按传感器重构误差做归因。
-- **扩展**：把报警的 Top-k 传感器映射到虚构的工控资产，结合 OpenVAS 对实验靶机的真实扫描、
-  CISA KEV 与 FIRST EPSS 情报，计算告警优先级并生成告警卡片。
+> Asset mapping and vulnerability data come from a lab environment and are for demonstration only.
 
-报警输入默认是真实报警 `data/processed/alerts.json`：LSTM-AE 在集群上完整运行后，在 HAI 21.03 测试集上的全部 1,703 条报警段
-（`"is_mock": false`，是模型的原始输出，其中包含误报）。融合打分对全部报警进行，卡片和演示页面只显示优先级最高的前 50 条
-（`config.yaml` 的 `fusion.max_rendered_alerts`）。mock 报警 `data/mock/alerts.json`（每条带 `"is_mock": true`）仍然保留：
-流水线加 `--mock`、演示页面在侧边栏切换，由它派生的输出都标注 [MOCK]。
+Unsupervised attack detection on the HAI 21.03 industrial control dataset with an LSTM autoencoder trained on normal
+data only, compared against four other models, plus a prototype that attaches vulnerability context from OpenVAS scans
+to the resulting alarms.
 
-界面和报告素材默认用英文显示（`config/config.yaml` 的 `ui.lang: en`；改成 `zh` 或设置环境变量 `UI_LANG=zh` 即为中文）。
-显示语言只影响文字：Streamlit、告警卡片、索引页、案例文档和图表的标题、坐标轴、图例；不影响任何计算、字段名和数字。
+## Background
 
-## 环境
+Labelled attack data from industrial control systems (ICS) is scarce, so detectors are usually trained on normal
+operation only. This project has two parts:
+
+- **Main line (quantitative).** Train an LSTM autoencoder (LSTM-AE) on the normal-only HAI 21.03 training files, score
+  the test files second by second, set the threshold on held-out normal data, and evaluate against the attack labels.
+  Four comparison models (PCA, IsolationForest, LSTM-VAE, Deep SVDD) use the same data split, windows and evaluation
+  code. Alarms are attributed to sensors by per-sensor reconstruction error.
+- **Extension (prototype and case study).** Map the top-k sensors of each alarm to a hand-built set of ICS assets,
+  combine this with a real OpenVAS scan of a lab target and with CISA KEV and FIRST EPSS data, compute an alert
+  priority, and render alert cards.
+
+The asset mapping is constructed by hand and the vulnerabilities come from a self-built lab target. They have no causal
+relation to the attacks in HAI. The fusion part does not claim to improve any detection metric.
+
+## Main results
+
+All numbers below are quoted from [`reports/main/key_numbers.md`](reports/main/key_numbers.md), which
+lists every number with its definition and source file. They come from full runs on a university SLURM cluster
+(NVIDIA L4). Local runs were used only for development and smoke tests, and no smoke-test number appears here.
+
+### Detection
+
+HAI 21.03 test1–5: 402,005 seconds, 8,947 attack seconds (2.23%), 50 attack events.
+
+Conventions for every detection metric:
+
+- **No point-adjust.** Point-wise F1 is therefore low, which is expected.
+- Threshold = 99th percentile of the scores on `val_thr`, a held-out normal segment used only for thresholding. An
+  alarm is raised when score > threshold.
+- The first W−1 seconds of each test file have no score and are excluded: 295 seconds in total, none of them attack
+  seconds.
+- An event counts as detected if at least one second inside it raises an alarm. False alarms are alarm segments that
+  overlap no attack event, per hour of normal time.
+
+| Model | Precision | Recall | F1 | AUROC | Events detected | Median delay (s) | False alarms / hour |
+|---|---|---|---|---|---|---|---|
+| pca | 0.0946 | 0.8405 | 0.1700 | 0.9014 | 48/50 | 6 | 7.16 (781 segments) |
+| iforest | 0.4144 | 0.4828 | 0.4460 | 0.8347 | 35/50 | 28 | 6.84 (746 segments) |
+| lstm_ae, seed 42 | 0.2765 | 0.8040 | 0.4115 | 0.9339 | 50/50 | 6 | 14.95 (1631 segments) |
+| **lstm_ae, 5 seeds** | 0.2929 ± 0.0168 | 0.8026 ± 0.0055 | **0.4290 ± 0.0184** | **0.9335 ± 0.0016** | 0.9920 ± 0.0110 (49.6/50 on average) | n/a | **13.19 ± 1.68** |
+| lstm_vae | 0.0606 | 0.8111 | 0.1128 | 0.8800 | 48/50 | 4 | 21.22 (2315 segments) |
+| deep_svdd | 0.1683 | 0.8287 | 0.2797 | 0.9055 | 49/50 | 3 | 69.33 (7564 segments) |
+
+- The 5-seed row is the main LSTM-AE configuration (W=60, hidden=64) with seeds 42–46, reported as mean ± sample
+  standard deviation (ddof=1). Every other row is a single seed (42).
+- LSTM-AE has the highest AUROC and event detection. Its point-wise F1 is not distinguishable from IsolationForest:
+  0.4290 vs 0.4460, a difference of 0.0170 = 0.93 standard deviations, and 1 of the 5 seeds is above IsolationForest.
+  The seed variation of IsolationForest itself was not measured.
+- LSTM-AE raises more false-alarm segments than PCA and IsolationForest.
+- Ablation over 9 combinations (W ∈ {30, 60, 120} × hidden ∈ {32, 64, 128}, single seed): F1 0.084–0.617, AUROC
+  0.899–0.946, false alarms 0.33–74.66 per hour. The best is W=60, hidden=32 (F1 0.617) and the worst is W=60,
+  hidden=128 (F1 0.084). The main configuration was fixed in advance, ranks 5th by F1, and was not changed.
+
+### Attribution
+
+A hit means the subsystem of the top-1 sensor is in the set of subsystems attacked in the event. Only alarm segments
+that overlap an attack are counted. Brackets are 95% Wilson intervals. Single seed.
+
+| Model | Per alarm segment | Per event (first overlapping segment) | Always guessing P1, same segments |
+|---|---|---|---|
+| lstm_ae | 54/72 = 0.750 [0.639, 0.836] | 43/50 = 0.860 [0.738, 0.930] | 0.681 |
+| lstm_vae | 52/57 = 0.912 [0.811, 0.962] | 47/48 = 0.979 [0.891, 0.996] | 0.702 |
+| pca | 37/53 = 0.698 [0.565, 0.805] | 36/48 = 0.750 [0.612, 0.851] | 0.679 |
+
+- LSTM-AE over 5 seeds (mean ± sample standard deviation): 0.777 ± 0.033 per alarm segment, 0.875 ± 0.026 per event.
+- LSTM-AE by segment length: under 10 s 7/20 = 0.350 [0.181, 0.567]; 10–60 s 1/4 = 0.250 [0.046, 0.699]; over 60 s
+  46/48 = 0.958 [0.860, 0.988].
+- Sensor-level Hit@k was not computed: the HAI 21.03 data files do not give per-sensor attack targets.
+
+### Fusion ranking
+
+Of the 1703 real LSTM-AE alarms, 72 overlap an attack event (base rate 0.042). Ranking by raw score, by fused priority
+with α=0, and by fused priority with α=1 all give precision@10 = 10/10, precision@20 = 20/20 and precision@50 = 45/50
+(95% interval for precision@50: [0.786, 0.957]).
+
+## Main findings
+
+1. **train1 and test3 overlap in the official release.** The last 43,201 seconds of train1 and the first 43,201
+   seconds of test3 are the same data, row for row across all 79 sensors, with no attack in it. In addition, the first
+   row of train1 equals the last row of test2. Both were removed from the training set and the test files were left as
+   released. Leaving the overlap in would understate false alarms on test3. See
+   [`reports/main/data_overlap.md`](reports/main/data_overlap.md).
+2. **Thresholds do not transfer from validation to test.** By construction 1% of `val_thr` seconds exceed the
+   threshold. On test the share is 19.8% for pca, 2.6% for iforest, 6.5% for lstm_ae, 29.8% for lstm_vae and 11.0% for
+   deep_svdd. For LSTM-AE it varies widely by file: test1 4.9%, test2 3.6%, test3 2.9%, test4 20.8%, test5 9.0%. The
+   likely cause is drift in normal operating conditions between training and test data. This is a hypothesis: which
+   sensors drift was not verified separately.
+3. **Good detection does not mean accurate attribution.** LSTM-AE is the best detector here but attributes 54/72 alarm
+   segments to the right subsystem. LSTM-VAE, with F1 0.1128, attributes 52/57. 34 of the 50 events involve P1, so
+   always answering P1 already scores about 0.68; PCA is at that baseline. LSTM-AE misses are concentrated in short
+   alarm segments.
+4. **Fusion ranking gives no measurable improvement.** The three rankings have identical precision@k. The ranking
+   quality comes from the anomaly score, not from the vulnerability context.
+
+## Repository structure
+
+```
+config/             config.yaml (paths and parameters), asset_map.yaml, fusion.yaml, cluster.yaml, i18n_en.yaml
+src/data/           HAI loading, preprocessing, sliding windows (never reads labels)
+src/models/         LSTM-AE, LSTM-VAE, Deep SVDD, PCA, IsolationForest
+src/eval/           labels (the only place labels are read), segments, metrics, alarms, fusion_ranking
+src/run_model.py    main entry point: prepare → train → diagnose → score → threshold → evaluate
+src/attribution.py  attribution and hit-rate evaluation
+src/vuln/           OpenVAS report parsing, KEV / EPSS enrichment
+src/fusion/         asset graph, risk, prioritisation, card rendering
+src/pipeline.py     one-command extension pipeline
+app/                Streamlit demo
+cluster/            SLURM job scripts, generated from config/cluster.yaml
+scripts/            data download, report and figure generation, alert export, cluster sync
+templates/          alert card and index templates
+tests/              unit tests
+data/samples/       OpenVAS report sample, HAI 21.03 column names
+data/mock/          mock alarms
+data/processed/     alerts.json (real LSTM-AE alarms), vulns.json, vulns_enriched.json
+reports/main/       main-line tables, figures and run snapshots; index in reports/main/README.md
+reports/extension/  extension figures and tables
+docs/               cluster notes, runbook and job queue
+PROGRESS.md         development log
+```
+
+## Setup
+
+Python 3.10–3.12. Local development uses CPU-only torch.
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m pytest -q          # 全部测试，不联网
+.venv/bin/python -m pytest -q          # all tests, no network access
 ```
 
-OpenVAS 使用 Greenbone Community Containers（Docker Compose），gvmd socket 路径见 `config/config.yaml` 的
-`gvm.socket_path`。扫描只针对 host-only 实验网 `gvm.lab_subnet` 内的靶机，需要 GVM 凭据的操作（扫描）由使用者手动运行。
+The cluster environment is described in [`env/README.md`](env/README.md) and pinned in `env/requirements-cluster.txt`.
 
-## 主线：结果摘要
+OpenVAS runs as Greenbone Community Containers (Docker Compose). Scans target only hosts inside the host-only lab
+subnet set in `gvm.lab_subnet`. Anything that needs GVM credentials is run manually by the operator.
 
-全部数字来自学校集群（Minerva，NVIDIA L4）上的完整运行；本地只做开发和冒烟测试。带口径和来源的完整清单见
-[`reports/main/key_numbers.md`](reports/main/key_numbers.md)，文件索引见 [`reports/main/README.md`](reports/main/README.md)。
+## Reproducing
 
-**检测**（HAI 21.03 test1~5，50 个攻击事件；阈值 = val_thr 分数的 99% 分位数；**不使用 point-adjust**，所以逐点 F1 偏低是预期结果）
-
-| 模型 | precision | recall | F1 | AUROC | 事件检出 | 误报（次/小时） |
-|---|---|---|---|---|---|---|
-| pca | 0.095 | 0.841 | 0.170 | 0.901 | 48/50 | 7.2 |
-| iforest | 0.414 | 0.483 | 0.446 | 0.835 | 35/50 | 6.8 |
-| **lstm_ae（主模型，5 个种子）** | 0.293 | 0.803 | **0.429 ± 0.018** | **0.934 ± 0.002** | 49.6/50 | 13.2 ± 1.7 |
-| lstm_vae | 0.061 | 0.811 | 0.113 | 0.880 | 48/50 | 21.2 |
-| deep_svdd | 0.168 | 0.829 | 0.280 | 0.906 | 49/50 | 69.3 |
-
-- LSTM-AE 一行是 5 个随机种子的均值（F1、AUROC、误报率带样本标准差）；其余模型只有单个种子。
-- LSTM-AE 的 AUROC 和事件检出最高；逐点 F1 与 IsolationForest 的差距在随机波动范围内，不能说哪个更好；它的误报段数高于 PCA 和 IsolationForest。
-- LSTM-VAE 和 Deep SVDD 明显不如 LSTM-AE。所有模型在 test 上的报警比例都高于验证集上的 1%（阈值迁移不好，推测是正常工况漂移）。
-- 消融（W × hidden，9 个组合）：结果对配置很敏感且不单调，F1 在 0.08~0.62 之间；事先固定的主模型配置（W=60、hidden=64）按 F1 排第 5，没有据此修改。
-
-**归因**（Top-1 传感器所属子系统是否在事件的子系统集合内；方括号为 95% Wilson 置信区间）
-
-| 模型 | 报警段命中率 | 按事件命中率（事件的第一个报警段） |
-|---|---|---|
-| lstm_ae | 54/72 = 0.750 [0.639, 0.836] | 43/50 = 0.860 [0.738, 0.930] |
-| lstm_vae | 52/57 = 0.912 [0.811, 0.962] | 47/48 = 0.979 [0.891, 0.996] |
-| pca | 37/53 = 0.698 [0.565, 0.805] | 36/48 = 0.750 [0.612, 0.851] |
-
-- 50 个事件里 34 个涉及 P1，不看数据总是回答 P1 就有约 0.68 的命中率：PCA 与这条参照线基本相同，LSTM-AE 略高，LSTM-VAE 明显更高。
-- LSTM-AE 的未命中集中在短报警段：超过 60 秒的报警段命中 46/48，不到 10 秒的只有 7/20。
-- 传感器级 Hit@k 没有做（数据中没有逐传感器的攻击目标）。
-
-**融合排序**：1,703 条真实报警中 72 条与攻击重叠；按原始分数、α=0、α=1 三种方式排序，precision@10 / @20 / @50 都是 10/10、20/20、45/50，
-没有可测量的差别。排序的作用来自异常分数，不来自漏洞上下文。三个案例见 [`reports/main/cases.md`](reports/main/cases.md)。
-
-### 主线：复现
+### Local
 
 ```bash
-# 本地：单元测试与冒烟（1% 数据、1 个 epoch；冒烟的数字不进报告）
-.venv/bin/python -m pytest -q
+# HAI 21.03: download into data/raw/hai-21.03 and verify size and sha against the official repository
+.venv/bin/python -m scripts.download_hai
+
+# Smoke test: 1% of the data, 1 epoch. Checks the pipeline only; its numbers are not results.
 bash cluster/train_one.sbatch --smoke lstm_ae
 
-# 集群：完整训练、打分、阈值、评估（命令与顺序见 docs/cluster_queue.md，操作步骤见 docs/cluster_runbook.md）
-sbatch cluster/baselines.sbatch
-sbatch cluster/train_one.sbatch lstm_ae          # lstm_vae、deep_svdd 同理
-sbatch cluster/ablation_array.sbatch
+# Extension pipeline: parse → intel → prioritize → render (--offline uses cached KEV / EPSS; --mock uses mock alarms)
+.venv/bin/python -m src.pipeline --offline
+.venv/bin/python -m scripts.make_extension_report
+.venv/bin/streamlit run app/streamlit_app.py
+```
 
-# 本地：同步产物后生成全部表图（顺序见 docs/cluster_queue.md 末尾）
+### Cluster (SLURM)
+
+Full training, scoring, thresholding, evaluation and ablation run on a cluster. The tracked `config/cluster.yaml` has
+placeholders for the user name and paths. Copy `config/cluster.local.example.yaml` to `config/cluster.local.yaml`, fill
+it in, and run `python -m scripts.make_cluster_jobs` to generate the real job scripts. The full procedure is in
+[`docs/cluster_runbook.md`](docs/cluster_runbook.md) and the job order in
+[`docs/cluster_queue.md`](docs/cluster_queue.md) (both in Chinese).
+
+```bash
+scripts/push_to_cluster.sh                       # local: rsync tracked files; refuses a dirty working tree
+
+# On the login node, submit only. Compute goes through srun or sbatch.
+sbatch cluster/pytest.sbatch                     # the full test suite must pass before any training job
+sbatch cluster/baselines.sbatch                  # PCA + IsolationForest (CPU)
+sbatch cluster/train_one.sbatch lstm_ae          # likewise lstm_vae, deep_svdd
+sbatch cluster/ablation_array.sbatch             # 9 (W, hidden) combinations
+```
+
+If `jobs.*.time` is not filled in `cluster.yaml`, pass `--time` explicitly to each `sbatch`. The four extra LSTM-AE
+seeds are submitted as in `docs/cluster_queue.md`.
+
+### Tables and figures from cluster artifacts (local)
+
+```bash
 scripts/pull_artifacts.sh
 .venv/bin/python -m scripts.make_main_report && .venv/bin/python -m scripts.make_figures
 .venv/bin/python -m scripts.make_ablation_report && .venv/bin/python -m src.attribution
@@ -82,115 +194,68 @@ scripts/pull_artifacts.sh
 .venv/bin/python -m scripts.make_key_numbers
 ```
 
-主线的硬性约束：只用 train1~3 训练；test 只在最终评估时读取，不用于调参、选阈值、选模型或早停；scaler 只在训练部分 fit；
-滑窗不跨越文件边界和切分点；标签只在 `src/eval/labels.py`、`src/evaluate.py`、`src/attribution.py` 中读取（有自动测试检查）。
-官方发布的 train1 末尾 43,201 秒与 test3 开头是同一份数据，已从训练集删除（见 `reports/main/data_summary.md`）。
+### Evaluation rules
 
-## 扩展部分：快速开始
+- Training uses train1–3 only. The last 20% in time order is validation, split in half into `val_es` (early stopping)
+  and `val_thr` (threshold).
+- test1–5 are read only for the final evaluation, never for tuning, thresholding, model selection or early stopping.
+- The scaler is fitted on the training part only. Windows never cross a file boundary or a split point.
+- Labels are read only in `src/eval/labels.py`, `src/evaluate.py` and `src/attribution.py`; an automated test checks
+  this.
 
-```bash
-# 一键流水线：parse → intel → prioritize → render（--offline 只用 data/intel/ 缓存；--mock 改用 mock 报警）
-.venv/bin/python -m src.pipeline --offline
+## Data
 
-# 报告素材：拓扑图、QoD 分布、KEV 表、关键数字 → reports/extension/
-.venv/bin/python -m scripts.make_extension_report
+This repository does not distribute the HAI raw data. Download HAI 21.03 (train1–3, test1–5) from the official
+repository, <https://github.com/icsdataset/hai>, either with `python -m scripts.download_hai` or by hand into
+`data/raw/hai-21.03/` (or the directory given by `HAI_DATA_DIR`). Use of the data is subject to the terms stated in
+that repository.
 
-# 交互演示：告警列表、卡片、资产风险，侧边栏调参实时重算；默认读真实报警，侧边栏可切换到 mock
-.venv/bin/streamlit run app/streamlit_app.py
+What is tracked here:
 
-# 案例：按固定规则从真实报警中挑 3 条 → reports/main/cases.md（需要先跑流水线和 python -m src.attribution）
-.venv/bin/python -m scripts.make_cases
-```
+- `data/processed/alerts.json`: all 1703 alarm segments of the main LSTM-AE run (seed 42) on the test set, not
+  filtered by label (`"is_mock": false`). Most of them are false alarms.
+- `data/processed/vulns.json`, `vulns_enriched.json`: a real OpenVAS scan of one lab target (Metasploitable2), with
+  KEV / EPSS as of 2026-09-29.
+- `data/mock/alerts.json`: mock alarms (`"is_mock": true`), selectable with `--mock`.
+- `reports/main/runs/`: small files from each cluster run (metrics, manifest, threshold, preprocessing summary,
+  training log), with host names replaced by placeholders.
 
-告警卡片输出到 `reports/cards/`（`index.html` 为按优先级排序的索引页；mock 的在 `reports/cards_mock/`）。
-融合排序的评估（precision@k）见 `reports/main/fusion_ranking_eval.md`，三个案例见 `reports/main/cases.md`。
+## Limitations
 
-## 扩展部分：流程与模块
+- **Threshold transfer and false alarms.** The 99th-percentile validation threshold produces far more than 1% alarms
+  on test. LSTM-AE averages 13.19 ± 1.68 false-alarm segments per hour, and only 72 of its 1703 alarms overlap an
+  attack. Neither the threshold nor the evaluation method was adjusted on the test set.
+- **One dataset, mostly one seed.** Evaluation is on HAI 21.03 only. Only the main LSTM-AE configuration was run with
+  5 seeds. That configuration was fixed in advance and is not the best in the ablation. LSTM-AE training had not
+  triggered early stopping after 50 epochs (best epoch 48).
+- **Coarse attribution evaluation.** Hit rates are at subsystem level only, with small denominators and wide
+  intervals. P4 has no subsystem label, so a top-1 sensor in P4 always counts as a miss. There is no sensor-level
+  Hit@k.
+- **Explanations are hypotheses.** The causes offered for the observations (drift in normal operation and others) were
+  not verified separately, except that short alarm segments are attributed worse, which the grouped numbers show.
+- **Severity saturates.** The anomaly severity S = min(1, max score ÷ threshold − 1) reaches 1 at twice the threshold.
+  61 alarms are capped and are no longer separated by score. The formula was left unchanged; improving it is future
+  work.
+- **One scanned target, saturated risk.** Only one lab host (ews_01) was scanned, so the subsystem exposure E_sub takes
+  only the values 0 or 1 and cannot separate P1 from P2. Other upstream assets are unassessed, so risk may be
+  understated.
+- **QoD.** With min_qod = 70, 66 of 540 vulnerabilities are kept. The rest are mostly remote version-banner matches,
+  which can be false positives on systems with backported patches.
+- **No causal link.** The asset mapping is constructed by hand and the vulnerabilities are unrelated to the HAI
+  attacks. Fusion output is a demonstration of alert enrichment and ranking, not a detection result.
 
-```
-OpenVAS XML ──parse_report──▶ vulns.json ──intel(KEV/EPSS)──▶ vulns_enriched.json ─┐
-alerts.json（主线 / mock）─────────────────────────────────────────────────────────┤
-asset_map.yaml ──asset_graph──▶ 传感器→子系统→上游资产/入侵路径 ────────────────────┤
-                                                                   risk + prioritize ▼
-                                                    enriched_alerts.json ──render_card──▶ 卡片 + 索引页
-```
+## Disclaimer
 
-| 步骤 | 模块 | 说明 |
-|---|---|---|
-| 扫描 | `scripts/smoke_scan.py` | 预检 / `--execute` 扫描 / `--report-id` 导出；报告过滤串 `levels=chmlg`（必须含 c，否则 Critical 被静默丢弃） |
-| 解析 | `src/vuln/parse_report.py` | 多份报告合并；三数核对（导出条数 = filtered = full）；丢弃 Log；按 (IP, 端口, NVT) 去重；不按 QoD 过滤 |
-| 情报 | `src/vuln/intel.py` | KEV 官方 JSON（缓存 24 小时）；EPSS API 分批（≤100 个、cve 参数 ≤2000 字符），按 CVE 缓存；`--offline` |
-| 资产图 | `src/fusion/asset_graph.py` | pydantic 校验 `asset_map.yaml`；上游资产 = 子系统资产 ∪ 反向可达；入侵路径 = 无入边资产 → PLC 的极大简单路径 |
-| 风险 | `src/fusion/risk.py` | r_v、R_asset、E_sub；QoD < min_qod 不参与，命中 KEV 的列入"需人工核实"；未扫描资产为"未评估"（计算中按 0） |
-| 排序 | `src/fusion/prioritize.py` | S、跨子系统加权、priority、排名，输出带免责声明 |
-| 卡片 | `src/fusion/render_card.py` | Jinja2 生成 Markdown / HTML 卡片与索引页 |
-| 流水线 | `src/pipeline.py` | 以上步骤一条命令执行；内容未变时不改写快照；只为优先级前 N 条生成卡片 |
-| 演示 | `app/streamlit_app.py` | 可选的交互界面，默认读真实报警、可切换到 mock；调参只影响页面，不写文件 |
+Asset mapping and vulnerability data come from a lab environment and are for demonstration only.
 
-## 融合打分
+OpenVAS was run only against self-built virtual machines on an isolated host-only network.
 
-参数在 `config/fusion.yaml`（默认 α = 1、β = 1、γ = 1.5、min_qod = 70）：
+## Notes
 
-1. 单条漏洞风险 `r_v = min(1, cvss/10 × (1 + β·epss) × (γ if in_kev else 1))`
-2. 资产风险 `R_asset = max(r_v)`；已扫描无漏洞记 0，未扫描记"未评估"（计算中按 0）
-3. 子系统暴露风险 `E_sub = max(R_asset)`，遍历子系统全部上游资产
-4. 异常严重度 `S = clip(max_score / threshold − 1, 0, 1)`
-5. 告警优先级 `priority = S × Σ_sub w_sub·(1 + α·E_sub)·criticality_sub`，w_sub 为 Top-k 误差占比在可识别传感器上的归一化值
-
-资产映射（`config/asset_map.yaml`）：子系统与 HAI 21.03 的列前缀一致（P1 锅炉、P2 汽轮机、P3 水处理、P4 HIL 仿真）。
-P4 没有独立控制链（assets 为空），卡片提示同时排查 P1/P2/P3（P4 与三者都有物理耦合）。PLC 按 OT 实践不主动扫描。
-
-## 扩展部分：结果摘要（真实扫描数据）
-
-详见 `reports/extension/key_numbers.md` 与 `kev_table.md`。
-
-- 靶机 ews_01（Metasploitable2）：630 条结果 → 540 条漏洞（Critical 101 条），涉及 1086 个 CVE。
-- 命中 KEV 9 条；其中 7 条 QoD 仅 30（版本横幅比对），列为"需人工核实"。
-- min_qod = 70 后保留 66 / 540 条（丢弃 88%）。
-- R_asset(ews_01) = 1.000；E_sub：P1 = P2 = 1.000，P3 未评估，P4 无控制链。
-
-![资产拓扑](reports/extension/asset_topology.png)
-
-![QoD 分布](reports/extension/qod_distribution.png)
-
-## 局限性
-
-- **单靶机、风险饱和**：只有 ews_01 被扫描评估；18 条漏洞的 r_v 截断到 1.0，E_sub 只能取 0 或 1，
-  无法区分 P1 与 P2 的暴露程度。其余上游资产未评估，卡片中提示"实际风险可能被低估"。
-  第二台靶机（hmi_main）的搭建说明与前后对比脚本已备好（`docs/e3_hmi_main_setup.md`、`scripts/compare_fusion.py`），作为未来工作。
-- **QoD 与误报**：88% 的结果 QoD 为 30（远程版本比对），Metasploitable2 上多为真阳性，但一般环境中可能因发行版回移补丁产生误报。
-- **主线：阈值迁移与误报**：验证集 99% 分位的阈值在测试集上产生的报警远多于 1%，LSTM-AE 平均每小时约 13 个误报段；
-  1,703 条报警中只有 72 条与攻击重叠。没有在测试集上调阈值或改评估方法。
-- **主线：单一数据集、多数结果为单个随机种子**：只在 HAI 21.03 上评估；只有 LSTM-AE 主配置跑了 5 个种子。
-  主模型配置事先固定，在消融中不是最好的组合。训练到 50 个 epoch 时损失仍在缓慢下降。
-- **主线：归因评估粗**：只能评估到子系统一级，分母小、置信区间宽；P4 没有子系统标签；没有传感器级的 Hit@k。
-- **融合打分**：异常严重度 S 在分数达到阈值 2 倍时就封顶，高分的真实攻击与刚过 2 倍阈值的误报得到相同的 S（见 `reports/main/cases.md`）；
-  融合排序相对按原始分数排序没有可测量的差别。改进打分公式留作未来工作。
-- **因果关系**：资产映射为人为构造，漏洞与 HAI 攻击无因果关系；融合结果不能作为检测指标，只用于演示告警富化与排序。
-- **情报时效**：KEV/EPSS 为 2026-09-29 的快照（`data/processed/vulns_enriched.json`），复现报告数字请使用 `--offline`。
-
-## 目录
-
-```
-config/           config.yaml（路径与参数）、asset_map.yaml、fusion.yaml
-data/samples/     OpenVAS 报告样本、HAI 21.03 列名
-data/processed/   vulns.json、vulns_enriched.json（真实数据快照，入库）
-data/mock/        mock 报警（入库）
-data/intel/       KEV / EPSS 缓存（不入库）
-data/processed/alerts.json  真实报警（LSTM-AE，入库）
-src/data/         HAI 读取、预处理、滑窗（不读标签）
-src/models/       LSTM-AE、LSTM-VAE、Deep SVDD、PCA、IsolationForest
-src/eval/         labels（唯一读标签处）、segments、metrics、alarms、fusion_ranking
-src/run_model.py  主线运行入口（prepare → train → diagnose → score → threshold → evaluate）
-src/attribution.py  归因与命中率评估
-cluster/          集群作业脚本（由 config/cluster.yaml 生成）
-reports/main/     主线报告素材（集群完整运行的结果，入库）；索引见 reports/main/README.md
-src/vuln/         parse_report、intel
-src/fusion/       asset_graph、risk、prioritize、render_card
-src/pipeline.py   一键流水线
-templates/        卡片与索引页模板
-app/              Streamlit 演示
-scripts/          扫描、检查、mock 生成、报告素材、前后对比
-reports/extension/  报告素材（真实数据，入库）；reports/cards/、reports/cards_mock/ 可由流水线重新生成，不入库
-docs/             集群说明与操作步骤（cluster_notes、cluster_runbook、cluster_queue）；hmi_main 搭建说明（未来工作）
-```
+- **Commit hashes.** The commit hashes in `run_manifest.json` files and in `PROGRESS.md` refer to a private
+  development repository. They do not exist in this public repository's history.
+- **Language.** Some internal documents (`PROGRESS.md`, `docs/`, the remaining tables and notes under `reports/`) and the code comments are
+  in Chinese. The Streamlit app, alert cards, case study and figures are in English by default (`ui.lang` in
+  `config/config.yaml`; set `UI_LANG=zh` for Chinese). The display language changes text only, never a number.
+- **AI-assisted development.** This project was developed with AI assistance (Claude Code). `docs/cluster_queue.md`
+  and `docs/cluster_runbook.md` refer to this workflow.
