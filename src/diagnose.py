@@ -1,10 +1,10 @@
-"""重尾特征诊断（只用 val_thr，不读取 test）：各传感器对重构 MSE 的平均贡献占比。
+"""Heavy-tail feature diagnosis (val_thr only, test is not read): average share of each sensor in the reconstruction MSE.
 
-对有逐传感器误差的模型，取 val_thr 上已打分各秒的平方误差均值，归一化为占比，写到运行目录的
-val_sensor_contrib.csv。单个传感器的占比超过 ml.diagnosis.max_sensor_share 时抛出 DiagnosisStop：
-运行在读取 test 之前停下，由人决定是否调整缩放方式。决定之后用 ml.diagnosis.allow_over_limit=true 放行。
+For models with per-sensor errors, take the mean squared error over the scored seconds of val_thr, normalize to shares, and write
+val_sensor_contrib.csv into the run directory. If a single sensor's share exceeds ml.diagnosis.max_sensor_share, raise DiagnosisStop:
+the run stops before reading test and a human decides whether to change the scaling. After the decision, ml.diagnosis.allow_over_limit=true lets it through.
 
-用法：
+Usage:
     python -m src.diagnose --model pca [--smoke]
 """
 
@@ -20,11 +20,11 @@ CONTRIB_FILE = "val_sensor_contrib.csv"
 
 
 class DiagnosisStop(RuntimeError):
-    """诊断结果需要人工决定，运行在读取 test 之前停下。"""
+    """The diagnosis result needs a human decision; the run stops before reading test."""
 
 
 def sensor_contributions(per_sensor_err: np.ndarray, features: list[str]) -> pd.DataFrame:
-    """逐秒逐传感器误差 (T, D) → 每个传感器的平均平方误差与占比，按占比从大到小排序。全为 NaN 的行不参与。"""
+    """Per-second per-sensor errors (T, D) -> mean squared error and share per sensor, sorted by share descending. All-NaN rows are ignored."""
     scored = ~np.isnan(per_sensor_err).all(axis=1)
     mean_err = per_sensor_err[scored].astype(np.float64).mean(axis=0)
     total = mean_err.sum()
@@ -34,7 +34,7 @@ def sensor_contributions(per_sensor_err: np.ndarray, features: list[str]) -> pd.
 
 
 def scale_profile(data) -> pd.DataFrame:
-    """每个传感器在 train 部分的标准差（scaler 使用的值），以及标准化后 val_thr 中 |z| 的分布。"""
+    """Each sensor's standard deviation on the train part (the value used by the scaler), and the distribution of |z| in val_thr after standardization."""
     z = np.abs(np.concatenate([s.x for s in data.segments["val_thr"]]))
     q50, q99, q999 = np.quantile(z, [0.5, 0.99, 0.999], axis=0)
     return pd.DataFrame({"sensor": data.pre.features, "train_std": data.pre.scaler.scale_,
@@ -52,7 +52,7 @@ def run(ctx) -> dict:
     df = sensor_contributions(per_sensor, data.pre.features).merge(scale_profile(data), on="sensor")
     df.to_csv(ctx.directory / CONTRIB_FILE, index=False)
     top = df.iloc[0]
-    gated = ctx.model == limits["model"]  # 是否停下只依据指定的基线（PCA）；其他模型只输出占比表
+    gated = ctx.model == limits["model"]  # Whether to stop depends only on the designated baseline (PCA); other models only write the share table
     over = bool(top["share"] > limits["max_sensor_share"])
     result = {"skipped": False, "top_sensor": top["sensor"], "top_share": float(top["share"]),
               "top5": {r.sensor: round(float(r.share), 4) for r in df.head(5).itertuples()},

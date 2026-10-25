@@ -1,4 +1,4 @@
-"""scripts/make_extension_report.py 的测试：用真实快照生成到临时目录。"""
+"""Tests of scripts/make_extension_report.py: generate from the real snapshots into a temporary directory."""
 
 import sys
 
@@ -17,11 +17,11 @@ def test_generates_all_outputs(tmp_path, monkeypatch):
     for s in ["写入 540 条", "Critical（CVSS ≥ 9.0）101 条", "保留 66 / 540 条", "| hmi_main | 未评估 |",
               "| P3 | 未评估（按 0） |", "仅用于演示"]:
         assert s in nums, s
-    assert "MOCK" not in nums  # 报告素材只用真实数据
+    assert "MOCK" not in nums  # The report material uses only real data
 
 
 def test_topology_asset_label_omits_missing_ip(monkeypatch):
-    """拓扑图：没有 IP 的资产只写角色，不写 " · -"；有 IP 的写"角色 · IP"。"""
+    """Topology: assets without an IP show only the role, not " · -"; those with an IP show "role · IP"."""
     from types import SimpleNamespace as NS
 
     from scripts.make_extension_report import asset_head

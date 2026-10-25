@@ -1,4 +1,4 @@
-"""M0 数据统计与路径解析的测试：全部使用手工构造的小 CSV，不读取真实 HAI 数据。"""
+"""Tests of the M0 data statistics and path resolution: all use small hand-made CSVs and never read the real HAI data."""
 
 import hashlib
 
@@ -47,10 +47,10 @@ def test_summarize_continuous_file(tmp_path):
     assert s["columns_match"] and s["n_features"] == 3 and s["nan_cells"] == 0
     assert s["labels"]["attack"] == {"values": [0, 1], "attack_s": 5, "events": 2,
                                      "min_s": 2, "median_s": 2.5, "max_s": 3}
-    # 子系统标签在同一事件内断续出现：事件数多于总标签
+    # Subsystem labels appear intermittently within one event: more events than for the overall label
     assert s["labels"]["attack_P1"]["events"] == 3
     assert s["label_consistency"] == {"main_without_sub_s": 2, "sub_without_main_s": 0, "multi_sub_s": 0}
-    # 事件 1：无标签的秒贴着结尾；事件 2：无标签的秒在内部
+    # Event 1: unlabeled seconds touch the end; event 2: unlabeled seconds are in the interior
     e1, e2 = s["events"]
     assert (e1["start"], e1["duration_s"], e1["subsystems"], e1["no_sub_s"], e1["no_sub_kind"]) == \
         ("2020-01-01 00:00:01", 2, "P1", 1, "edge")
@@ -60,7 +60,7 @@ def test_summarize_continuous_file(tmp_path):
 
 def test_summarize_detects_gap_duplicate_and_column_mismatch(tmp_path):
     times = seconds("2020-01-01 00:00:00", 3) + seconds("2020-01-01 00:00:10", 2)
-    times.append(times[-1])  # 重复时间戳
+    times.append(times[-1])  # Duplicated timestamp
     p = make_csv(tmp_path / "b.csv", times)
     s = summarize_file(p, COLS + ["P3_X"], "time", LABELS, with_feature_stats=False)
     assert s["gap_count"] == 1 and s["missing_seconds"] == 7
@@ -78,7 +78,7 @@ def test_events_without_any_subsystem_label(tmp_path):
 
 
 def test_hash_rows_ignores_int_vs_float_dtype():
-    # 同一列在不同文件里可能被解析为 int64 或 float64；取值相同的行哈希必须相同
+    # The same column may be parsed as int64 or float64 in different files; rows with equal values must hash the same
     a = pd.DataFrame({"x": [1, 2], "y": [0.5, 1.5]})
     b = pd.DataFrame({"x": [1.0, 2.0], "y": [0.5, 1.5]})
     assert (hash_rows(a) == hash_rows(b)).all()
@@ -87,17 +87,17 @@ def test_hash_rows_ignores_int_vs_float_dtype():
 
 def test_matched_runs_finds_misaligned_and_split_segments():
     a = np.array([10, 11, 12, 13, 14, 15, 16], dtype=np.uint64)
-    # b 含 a[1:4]（错位到下标 5）和 a[5:7]（下标 0），中间夹着无关的行
+    # b contains a[1:4] (shifted to index 5) and a[5:7] (index 0), with unrelated rows in between
     b = np.array([15, 16, 90, 91, 92, 11, 12, 13, 93], dtype=np.uint64)
     assert matched_runs(a, b) == [(1, 5, 3), (5, 0, 2)]
     assert matched_runs(a, np.array([1, 2], dtype=np.uint64)) == []
 
 
 def test_content_overlap_ignores_time_and_labels(tmp_path):
-    # a 的后 4 行与 b 的前 4 行传感器取值相同，但时间戳完全不同（错位重叠），且 b 带攻击标签
+    # The last 4 rows of a have the same sensor values as the first 4 rows of b, but completely different timestamps (shifted overlap), and b carries attack labels
     a = make_csv(tmp_path / "a.csv", seconds("2020-01-01", 10), base=0)
     b = make_csv(tmp_path / "b.csv", seconds("2020-03-01", 8), attack=[1] * 8, base=6)
-    # c 与 a 时间戳相同但内容不同：不算重叠
+    # c has the same timestamps as a but different content: not an overlap
     c = make_csv(tmp_path / "c.csv", seconds("2020-01-01", 5), base=100)
     hashes = {p.name: file_row_hashes(p, "time", LABELS) for p in (a, b, c)}
     internal, runs = find_content_overlaps(hashes)
@@ -138,7 +138,7 @@ def test_data_and_artifact_dirs_env_override(monkeypatch, tmp_path):
 
 
 def test_no_absolute_paths_in_tracked_code():
-    """可移植性：代码和配置里不出现用户主目录的绝对路径。"""
+    """Portability: no absolute paths into the user's home directory in code or config."""
     files = [p for d in ("src", "scripts", "app", "cluster", "config") for p in (ROOT / d).rglob("*")
              if p.suffix in (".py", ".yaml", ".sh", ".sbatch", ".j2") and "__pycache__" not in p.parts]
     assert len(files) > 20

@@ -1,4 +1,4 @@
-"""M2a：报警段合并与评估指标，在手工构造的小样例上核对（含无报警、全报警、无攻击事件）。"""
+"""M2a: alarm-segment merging and evaluation metrics, checked on small hand-made examples (including no alarms, all alarms, no attack events)."""
 
 import math
 
@@ -40,7 +40,7 @@ def test_overlaps_is_inclusive():
     assert not overlaps((1, 3), (4, 5))
 
 
-# ---------- 逐点指标 ----------
+# ---------- Point-wise metrics ----------
 
 SCORES = np.array([NAN, 0.1, 0.9, 0.8, 0.2, 0.95])
 LABELS = np.array([1, 0, 1, 0, 1, 0])
@@ -51,13 +51,13 @@ def test_point_metrics_hand_example():
     assert (m["tp"], m["fp"], m["fn"], m["tn"]) == (1, 2, 1, 1)
     assert m["precision"] == pytest.approx(1 / 3) and m["recall"] == pytest.approx(0.5)
     assert m["f1"] == pytest.approx(0.4)
-    assert m["auroc"] == pytest.approx(0.5)  # 6 个正负对中有 3 对排序正确
-    # NaN 的那一秒（标签为 1）不参与任何指标，只计数
+    assert m["auroc"] == pytest.approx(0.5)  # 3 of the 6 positive/negative pairs are ordered correctly
+    # The NaN second (label 1) is excluded from every metric and only counted
     assert (m["n_points"], m["n_unscored"], m["n_positive"], m["n_positive_unscored"]) == (5, 1, 2, 1)
 
 
 def test_point_metrics_no_point_adjust():
-    """一个 5 秒的事件只有 1 秒报警：recall 是 1/5，而不是 point-adjust 之后的 1。"""
+    """A 5-second event with only 1 alarm second: recall is 1/5, not the 1 that point-adjust would give."""
     labels = np.array([0, 1, 1, 1, 1, 1, 0])
     scores = np.array([0, 0, 0, 1.0, 0, 0, 0])
     assert point_metrics(scores, labels, 0.5)["recall"] == pytest.approx(0.2)
@@ -70,7 +70,7 @@ def test_point_metrics_threshold_is_strict():
 def test_point_metrics_no_alarms():
     m = point_metrics(SCORES, LABELS, 10.0)
     assert math.isnan(m["precision"]) and m["recall"] == 0 and m["f1"] == 0
-    assert m["auroc"] == pytest.approx(0.5)  # AUROC 与阈值无关
+    assert m["auroc"] == pytest.approx(0.5)  # AUROC does not depend on the threshold
 
 
 def test_point_metrics_all_alarms():
@@ -93,7 +93,7 @@ def test_unscored_seconds_never_alarm():
     assert alarms_from_scores(np.array([NAN, 2.0, 0.0]), 1.0).tolist() == [False, True, False]
 
 
-# ---------- 事件级指标 ----------
+# ---------- Event-level metrics ----------
 
 def make(n, alarm_idx, event_ranges, nan_head=0):
     scores, labels = np.zeros(n), np.zeros(n, dtype=int)
@@ -105,14 +105,14 @@ def make(n, alarm_idx, event_ranges, nan_head=0):
 
 
 def test_event_metrics_hand_example():
-    # 事件 (5,9)、(14,16)；报警段 (3,3) 误报、(7,8) 命中第一个事件、(18,19) 误报；前 2 秒未打分
+    # Events (5,9), (14,16); alarm segments (3,3) false alarm, (7,8) hits the first event, (18,19) false alarm; first 2 seconds unscored
     pair = make(20, [3, 7, 8, 18, 19], [(5, 9), (14, 16)], nan_head=2)
     summary, events, alarms = event_metrics([pair], 0.5)
     assert (summary["n_events"], summary["n_detected"], summary["n_missed"]) == (2, 1, 1)
     assert summary["event_recall"] == 0.5
-    assert summary["delay_median_s"] == 2 and summary["delay_mean_s"] == 2  # 只统计检出的事件
+    assert summary["delay_median_s"] == 2 and summary["delay_mean_s"] == 2  # Only detected events are counted
     assert (summary["n_alarm_segments"], summary["n_false_alarm_segments"]) == (3, 2)
-    # 正常时长：12 秒标签为 0，其中 2 秒未打分 → 10 秒
+    # Normal duration: 12 seconds with label 0, 2 of them unscored -> 10 seconds
     assert summary["normal_hours"] == pytest.approx(10 / 3600)
     assert summary["false_alarms_per_hour"] == pytest.approx(720)
     assert [(e["start"], e["end"], e["detected"], e["delay_s"]) for e in events] == [(5, 9, True, 2), (14, 16, False, None)]
@@ -134,7 +134,7 @@ def test_event_metrics_no_alarms():
 def test_event_metrics_all_alarms():
     summary, _, alarms = event_metrics([make(10, range(10), [(2, 4), (7, 8)])], 0.5)
     assert summary["event_recall"] == 1 and summary["delay_median_s"] == 0
-    assert len(alarms) == 1 and summary["n_false_alarm_segments"] == 0  # 一整段报警与事件重叠，不算误报
+    assert len(alarms) == 1 and summary["n_false_alarm_segments"] == 0  # A single alarm segment overlapping an event is not a false alarm
 
 
 def test_event_metrics_no_events():
@@ -162,10 +162,10 @@ def test_event_fully_unscored_counts_as_missed():
     assert summary["n_missed"] == 1 and events[0]["n_unscored_s"] == 3
 
 
-# ---------- 已定的指标约定（CLAUDE.md 主线补充决策 6b） ----------
+# ---------- Agreed metric conventions (CLAUDE.md main-line decision 6b) ----------
 
 def test_convention_no_alarms_with_attacks_counts_as_zero():
-    """没有报警但评估范围内有攻击：precision 为 NaN，recall 和 F1 记 0（漏掉了全部攻击），不是 NaN。"""
+    """No alarms but attacks within the evaluation range: precision is NaN, recall and F1 are 0 (all attacks missed), not NaN."""
     m = point_metrics(np.array([0.1, 0.2, 0.3, 0.4]), np.array([0, 1, 1, 0]), 5.0)
     assert math.isnan(m["precision"]) and m["recall"] == 0.0 and m["f1"] == 0.0
     summary, _, _ = event_metrics([(np.array([0.1, 0.2, 0.3, 0.4]), np.array([0, 1, 1, 0]))], 5.0)
@@ -174,8 +174,8 @@ def test_convention_no_alarms_with_attacks_counts_as_zero():
 
 def test_convention_auroc_depends_only_on_scores():
     scores, labels = np.array([0.1, 0.9, 0.4, 0.7, NAN]), np.array([0, 1, 0, 1, 1])
-    values = [point_metrics(scores, labels, t)["auroc"] for t in (-1.0, 0.5, 5.0)]  # 全报警、部分报警、无报警
+    values = [point_metrics(scores, labels, t)["auroc"] for t in (-1.0, 0.5, 5.0)]  # All alarms, some alarms, no alarms
     assert values == [1.0, 1.0, 1.0]
-    # 只有评估范围（已打分的秒）内全是同一类标签时才是 NaN
+    # NaN only when all labels within the evaluation range (scored seconds) are of one class
     assert math.isnan(point_metrics(scores, np.array([0, 0, 0, 0, 1]), 0.5)["auroc"])
     assert math.isnan(point_metrics(scores, np.ones(5, dtype=int), 0.5)["auroc"])

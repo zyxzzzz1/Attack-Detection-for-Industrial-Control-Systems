@@ -1,9 +1,9 @@
-"""打印 HAI train 文件的全部列名，标注时间列 / 传感器列（按子系统前缀）/ 标签列，并保存到文本文件。
+"""Print all column names of a HAI train file, marking the time column / sensor columns (by subsystem prefix) / label columns, and save them to a text file.
 
-只做检查用途（claude.md 第 11 节：不臆测列名）。同时统计行数、时间范围和各标签列的取值，
-确认 train 文件的标签是否全为 0。
+For inspection only (claude.md section 11: do not guess column names). Also reports row count, time range and the values of each label column,
+to confirm whether the labels of the train files are all 0.
 
-用法：
+Usage:
     python -m scripts.inspect_hai_columns data/raw/hai-21.03/train1.csv.gz \
         --output data/samples/hai_columns.txt
 """

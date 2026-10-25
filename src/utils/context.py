@@ -1,7 +1,7 @@
-"""一次运行的上下文：各阶段（prepare、train、diagnose、score、threshold、evaluate）之间共享的对象。
+"""Context of one run: objects shared between the stages (prepare, train, diagnose, score, threshold, evaluate).
 
-每个阶段都可以单独执行（--stages），所以需要的东西不在内存里时从运行目录读取或重新计算：
-数据重新读取并 fit 预处理（确定性的，结果与 prepare 阶段相同），模型从运行目录读取。
+Each stage can run on its own (--stages), so anything not in memory is read from the run directory or recomputed:
+data are re-read and preprocessing refit (deterministic, same result as the prepare stage), the model is loaded from the run directory.
 """
 
 import sys
@@ -24,7 +24,7 @@ class RunContext:
     manifest: RunManifest
     log: object
     data: TrainData | None = None
-    state: dict = field(default_factory=dict)  # 阶段之间传递的内存对象（模型、分数等）
+    state: dict = field(default_factory=dict)  # In-memory objects passed between stages (model, scores, etc.)
 
     @property
     def fraction(self) -> float:
@@ -36,7 +36,7 @@ class RunContext:
         return self.data
 
     def dataset(self, split: str) -> WindowDataset:
-        """train 用训练步长，val_es / val_thr 用评估步长。"""
+        """train uses the training stride; val_es / val_thr use the evaluation stride."""
         w = self.cfg["ml"]["window"]
         return self.ensure_data().dataset(split, w["length"], w["train_stride"] if split == "train" else w["eval_stride"])
 
@@ -48,7 +48,7 @@ class RunContext:
 
 
 def stage_cli(stages: str, description: str) -> int:
-    """单个阶段脚本（python -m src.train 等）的入口：转给 run_model，只执行指定的阶段。"""
+    """Entry point of the single-stage scripts (python -m src.train etc.): forwards to run_model and runs only the given stage."""
     from src.run_model import main
     if any(a in ("-h", "--help") for a in sys.argv[1:]):
         print(f"{description}\n等价于 python -m src.run_model --stages {stages} ...；参数如下。\n")

@@ -1,7 +1,7 @@
-# 集群（Minerva，Python 3.12）的锁定依赖。由本地 .venv（Python 3.10）的 pip freeze 生成，版本与本地一致；
-# 唯一区别是 torch：本地为 2.14.1+cpu，集群为同版本的 CUDA 构建（安装方式见 env/README.md）。
-# 已验证全部版本在 Python 3.12 上有 wheel，且在 3.12 环境中完整 pytest 通过（见 env/README.md）。
-# 重新生成：见 env/README.md 的"更新锁定文件"。
+# Pinned dependencies for the cluster (Minerva, Python 3.12). Generated from pip freeze of the local .venv (Python 3.10), same versions as local;
+# the only difference is torch: 2.14.1+cpu locally, the CUDA build of the same version on the cluster (installation in env/README.md).
+# Verified that every version has a wheel for Python 3.12 and that the full pytest passes in a 3.12 environment (see env/README.md).
+# To regenerate: see "Updating the lock file" in env/README.md.
 altair==6.2.2
 annotated-types==0.8.0
 anyio==4.15.1

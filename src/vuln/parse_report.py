@@ -1,14 +1,14 @@
-"""OpenVAS XML 报告 → 标准化漏洞记录 vulns.json（claude.md 第 7 节 M7）。
+"""OpenVAS XML report -> normalized vulnerability records vulns.json (claude.md section 7, M7).
 
-处理规则：
-- 读取前做三数核对：实际 result 条数 == result_count/filtered == result_count/full，
-  不一致说明导出时有结果被过滤或分页截断，直接报错退出。
-- 不做 QoD 过滤，全部保留并写入 qod 字段（过滤在融合打分阶段按 fusion.yaml 的 min_qod 进行）。
-- Log 结果（severity <= 0）不写入。
-- 按 (asset_ip, port, nvt_oid) 去重：保留 severity 最高的，其次 QoD 最高的。
-- 支持多份报告（每台靶机一份）：逐份核对后合并，跨报告同样去重。
+Rules:
+- Before parsing, a three-count check: actual number of results == result_count/filtered == result_count/full;
+  a mismatch means results were filtered or truncated by paging during export, so exit with an error.
+- No QoD filtering: everything is kept with its qod field (filtering happens during fusion scoring, using min_qod from fusion.yaml).
+- Log results (severity <= 0) are not written.
+- Deduplicate by (asset_ip, port, nvt_oid): keep the highest severity, then the highest QoD.
+- Several reports are supported (one per target): each is checked, then merged, deduplicating across reports as well.
 
-用法：
+Usage:
     python -m src.vuln.parse_report [--input XML [XML ...]] [--output JSON]
 """
 
@@ -26,11 +26,11 @@ DISCLAIMER = "资产映射与漏洞数据来自实验环境，仅用于演示"
 
 
 class ReportIntegrityError(Exception):
-    """报告条数核对失败（导出不完整）。"""
+    """Report count check failed (incomplete export)."""
 
 
 def load_report(path: Path) -> etree._Element:
-    """读取报告并做三数核对，返回内层 <report> 节点。"""
+    """Read a report, run the three-count check, and return the inner <report> node."""
     root = etree.parse(str(path)).getroot()
     report = root.find(".//report/report")
     if report is None:
@@ -50,7 +50,7 @@ def _text(el: etree._Element, path: str) -> str:
 
 
 def parse_result(result: etree._Element) -> dict:
-    """把单个 <result> 节点转成标准化记录（含 Log 结果，是否丢弃由调用方决定）。"""
+    """Convert a single <result> node into a normalized record (Log results included; the caller decides whether to drop them)."""
     nvt = result.find("nvt")
     solution = nvt.find("solution")
     severity_type = nvt.find("severities/severity")
@@ -75,7 +75,7 @@ def parse_result(result: etree._Element) -> dict:
 
 
 def _rel(path: Path) -> str:
-    """项目内路径写成相对路径，便于快照在不同机器上比对。"""
+    """Write paths inside the project as relative paths, so snapshots compare across machines."""
     try:
         return str(Path(path).resolve().relative_to(ROOT))
     except ValueError:
@@ -83,8 +83,8 @@ def _rel(path: Path) -> str:
 
 
 def parse_reports(paths: list[Path]) -> dict:
-    """解析并合并多份报告（每份单独做三数核对），跨报告同样按 (asset_ip, port, nvt_oid) 去重；
-    vulns 按 cvss 降序排列。"""
+    """Parse and merge several reports (each with its own three-count check), deduplicating across reports by (asset_ip, port, nvt_oid) as well;
+    vulns are sorted by cvss, descending."""
     sources, records = [], []
     for path in paths:
         report = load_report(path)
@@ -120,7 +120,7 @@ def parse_reports(paths: list[Path]) -> dict:
 
 
 def parse_report(path: Path) -> dict:
-    """单份报告的便捷入口。"""
+    """Convenience entry point for a single report."""
     return parse_reports([path])
 
 

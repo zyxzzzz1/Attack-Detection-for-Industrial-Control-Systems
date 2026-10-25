@@ -1,15 +1,15 @@
-"""把 LSTM-AE 的报警段导出为 alerts.json（I1），字段与 data/mock/alerts.json 的契约一致。不读取任何标签。
+"""Export the LSTM-AE alarm segments to alerts.json (I1), with fields matching the contract of data/mock/alerts.json. Reads no labels.
 
-每个报警段一条：alert_id、start、end（HAI 原始时间格式）、max_score、threshold、topk（[{sensor, share}]）、
-is_mock=false、model=模型名。报警段由 src/eval/alarms.py 的 alarm_segments 得到（内部调用 to_segments），
-与 evaluate.py 的事件级统计、attribution.py 的归因用的是同一个定义（主线补充决策 6、8）。
-share 是该传感器占段内全部传感器误差的比例（不在 Top-k 内重新归一化），所以 Top-k 的 share 之和不超过 1。
+One entry per alarm segment: alert_id, start, end (HAI raw time format), max_score, threshold, topk ([{sensor, share}]),
+is_mock=false, model=<model name>. Alarm segments come from alarm_segments in src/eval/alarms.py (which calls to_segments),
+the same definition used by the event-level statistics of evaluate.py and the attribution of attribution.py (main-line decisions 6, 8).
+share is the sensor's fraction of the total error of all sensors in the segment (not renormalized within the Top-k), so the Top-k shares sum to at most 1.
 
-- 正式（默认）：只接受集群上完整运行的 LSTM-AE 产物（非冒烟、git_dirty=false、已完成），写到 ml.alerts.output
-  （data/processed/alerts.json，入库）。
-- --smoke：读冒烟产物，写到 产物目录/smoke_reports/alerts.json，不会碰 data/processed/。
+- Official (default): accepts only artifacts of a full LSTM-AE run on the cluster (not smoke, git_dirty=false, completed), written to ml.alerts.output
+  (data/processed/alerts.json, tracked).
+- --smoke: reads smoke artifacts and writes to <artifact dir>/smoke_reports/alerts.json, never touching data/processed/.
 
-用法：
+Usage:
     python -m scripts.export_alerts [--smoke]
 """
 

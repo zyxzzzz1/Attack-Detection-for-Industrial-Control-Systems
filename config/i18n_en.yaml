@@ -1,6 +1,6 @@
-# 英文译文表（ui.lang: en）。键是代码和模板里的中文源文，值是英文；zh 时直接使用键。
-# 只是显示文字：{名字} 是数字或数据的占位符，译文里必须保留同样的占位符，不能写入具体数字。
-# 增删显示文字后运行 python -m scripts.i18n_keys 检查有没有缺少或多余的键（测试也会检查）。
+# English translation table (ui.lang: en). Keys are the Chinese source strings in code and templates, values are English; with zh the keys are used directly.
+# Display text only: {name} is a placeholder for a number or data; translations must keep the same placeholders and must not hard-code any number.
+# After adding or removing display text, run python -m scripts.i18n_keys to check for missing or extra keys (the tests check this too).
 　: ' '
 、: ', '
 。: ' '

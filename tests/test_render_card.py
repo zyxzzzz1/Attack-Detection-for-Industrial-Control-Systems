@@ -1,4 +1,4 @@
-"""src/fusion/render_card.py 的测试：用构造资产图 + 构造漏洞 + mock 报警渲染到临时目录。"""
+"""Tests of src/fusion/render_card.py: render a hand-built asset graph + hand-built vulnerabilities + mock alerts into a temporary directory."""
 
 import re
 from pathlib import Path
@@ -46,23 +46,23 @@ def test_files_written(rendered):
 @pytest.mark.parametrize("ext", ["md", "html"])
 def test_card_contains_all_m10_fields(rendered, ext):
     t = read(rendered, f"01_A-P1.{ext}")
-    for s in ["A-P1", "2020-07-15 10:00:00", "2020-07-15 10:00:59", "1 分",   # ID、起止、时长
-              "0.2000", "0.1000",                                          # 分数 / 阈值
-              "P1_FT03", "70.0%",                                          # Top-k 与占比
-              "P1 锅炉", "0.9",                                            # 子系统与关键度
-              "hist → hmi → plc_p1", "ews_a → plc_p1",                     # 入侵路径
-              "KEV", "CVE-2000-0001",                                      # 漏洞 KEV 标注
-              "优先排查资产", "修复建议", "fix",                           # 建议动作与修复建议
+    for s in ["A-P1", "2020-07-15 10:00:00", "2020-07-15 10:00:59", "1 分",   # ID, start/end, duration
+              "0.2000", "0.1000",                                          # Score / threshold
+              "P1_FT03", "70.0%",                                          # Top-k and shares
+              "P1 锅炉", "0.9",                                            # Subsystems and criticality
+              "hist → hmi → plc_p1", "ews_a → plc_p1",                     # Intrusion paths
+              "KEV", "CVE-2000-0001",                                      # KEV mark on vulnerabilities
+              "优先排查资产", "修复建议", "fix",                           # Recommended actions and remediation
               "第 1", "[MOCK]", "单子系统", DISCLAIMER]:
         assert s in t, f"{ext} 卡片缺少 {s!r}"
-    assert t.count(DISCLAIMER) >= 2  # 顶部与页脚
+    assert t.count(DISCLAIMER) >= 2  # Header and footer
 
 
 @pytest.mark.parametrize("ext", ["md", "html"])
 def test_needs_review_block(rendered, ext):
     assert "需人工核实" in read(rendered, f"01_A-P1.{ext}")
     assert "LowQoD KEV" in read(rendered, f"01_A-P1.{ext}")
-    # P3 的上游不含 ews_a，没有需核实的漏洞
+    # P3's upstream does not include ews_a, so nothing needs verification
     p3 = read(rendered, f"03_A-P3.{ext}")
     assert "LowQoD KEV" not in p3 and "未评估（未扫描）的资产" in p3
 
@@ -79,7 +79,7 @@ def test_html_escapes_and_md_pipes(rendered):
     assert "<b>AJP</b>" not in html and "&lt;b&gt;AJP&lt;/b&gt;" in html
     md = read(rendered, "01_A-P1.md")
     row = next(line for line in md.splitlines() if "Ghostcat" in line and line.startswith("| 1 |"))
-    assert "\\| pipe" in row and len(re.findall(r"(?<!\\)\|", row)) == 10  # 9 列 → 10 个未转义竖线
+    assert "\\| pipe" in row and len(re.findall(r"(?<!\\)\|", row)) == 10  # 9 columns -> 10 unescaped pipes
 
 
 @pytest.mark.parametrize("ext", ["md", "html"])
@@ -104,7 +104,7 @@ def test_no_mock_banner_for_real_alerts(tmp_path):
 def test_actions_dedup_fixes(meta):
     a = meta["alerts"][0]
     acts = build_actions(a)
-    assert len(acts["fixes"]) == 1  # 两条漏洞的修复文本都是 "fix"
+    assert len(acts["fixes"]) == 1  # The remediation text of both vulnerabilities is "fix"
     assert acts["steps"][0].startswith("优先排查资产：ews_a")
 
 
@@ -130,7 +130,7 @@ def test_unassessed_shown_not_zero(rendered, ext):
     t = read(rendered, f"01_A-P1.{ext}")
     assert "该路径存在未评估资产，实际风险可能被低估" in t
     assert "可能被低估" in t
-    # hmi 未扫描：显示"未评估"，不显示 0.000
+    # hmi is unscanned: shows "未评估" (not assessed), not 0.000
     row = next(line for line in t.splitlines() if re.search(r"(\| |<td>)hmi( \||</td>)", line))
     assert "未评估" in row and "0.000" not in row
     assert "另有 2 个上游资产未评估" in t
@@ -149,7 +149,7 @@ def test_subsystem_all_unassessed_and_no_assets(tmp_path, ext):
     t = read(tmp_path, f"01_A.{ext}")
     assert "E_sub 未评估（上游资产均未扫描，按 0 计算）" in t
     assert "E_sub = 0.000（无控制链：HIL 仿真）" in t and "无关联资产" not in t
-    # 路径上的资产全部未扫描：E_sub 写"未评估"，不写"可能被低估"（提示语那一句仍在）
+    # All path assets unscanned: E_sub shows "未评估" (not assessed), not "可能被低估" (may be underestimated) (the warning sentence is still there)
     assert exposure(meta["alerts"][0]) == "not_assessed"
     assert ("0.000（未评估：上游资产均未扫描）" if ext == "md" else "未评估：上游资产均未扫描</span>") in t
     assert "（可能被低估）" not in t and "可能被低估</span>" not in t
@@ -171,8 +171,8 @@ def test_no_underestimate_banner_when_all_assessed(tmp_path):
 
 @pytest.mark.parametrize("ext", ["md", "html"])
 def test_index_columns_tie_rule_and_exposure_text(rendered, meta, ext):
-    """索引页：S 前面有"分数 / 阈值"（倍数）一列；写明并列时的排序规则；部分资产未扫描写"可能低估"，
-    没有上游资产的（P4）不加任何标注。"""
+    """Index page: a "score / threshold" (multiple) column before S; the tie-breaking rule is stated; partially unscanned assets show "可能低估" (may be underestimated),
+    and those without upstream assets (P4) get no mark."""
     idx = read(rendered, f"index.{ext}")
     head = next(line for line in idx.splitlines() if "Priority" in line and "E_sub" in line)
     assert head.index("Priority") < head.index("分数 / 阈值") < head.index("S<" if ext == "html" else "| S |")
@@ -186,7 +186,7 @@ def test_index_columns_tie_rule_and_exposure_text(rendered, meta, ext):
 
 
 def test_tie_order_is_s_then_alert_id():
-    """并列规则：priority 相同按 S 降序，再相同按告警编号升序；卡片、索引页、案例都用 prioritize 给出的 rank。"""
+    """Tie rule: equal priority sorted by S descending, then by alert ID ascending; cards, index page and cases all use the rank given by prioritize."""
     g = AssetGraph(AssetMap.model_validate(amap_dict()))
     alerts = [alert("B", 3.0, [("P1_X", 1.0)]), alert("A", 9.0, [("P1_X", 1.0)]), alert("C", 2.5, [("P1_X", 1.0)])]
     out = prioritize(alerts, [], g, PARAMS)["alerts"]
@@ -199,7 +199,7 @@ def test_zero_weight_subsystems_hidden_in_list(tmp_path, ext):
     g = AssetGraph(AssetMap.model_validate(amap_dict()))
     meta = prioritize([alert("A", 1.5, [("P1_X", 0.9997), ("P4_Y", 0.0003)])], [], g, PARAMS)
     a = meta["alerts"][0]
-    assert [s["id"] for s in a["subsystems"]] == ["P1", "P4"]             # 计算结果不变，只是列表里不显示
+    assert [s["id"] for s in a["subsystems"]] == ["P1", "P4"]             # The computed result is unchanged; it is just not shown in the list
     assert [s["id"] for s in shown_subsystems(a, 1)] == ["P1"] == [s["id"] for s in shown_subsystems(a)]
     render_all(meta, make_env(ROOT / "templates"), tmp_path, [ext])
     idx = read(tmp_path, f"index.{ext}")

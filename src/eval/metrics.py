@@ -1,9 +1,9 @@
-"""评估指标：逐点指标与事件级指标。所有模型共用，输入统一为 (scores, labels, threshold)（约束 6）。
+"""Evaluation metrics: point-wise and event-level. Shared by all models, with uniform input (scores, labels, threshold) (constraint 6).
 
-- 不使用 point-adjust（约束 4）：逐点指标按每一秒各自的预测计算。
-- 分数为 NaN 的秒（每个测试文件的前 W−1 秒）不参与任何指标，被排除的秒数在结果中报告（n_unscored）。
-- 报警规则：分数 > 阈值。
-- 本模块不读取任何文件，标签由调用方（evaluate.py）传入。
+- No point-adjust (constraint 4): point-wise metrics use each second's own prediction.
+- Seconds with NaN scores (the first W−1 seconds of each test file) are excluded from every metric; the number excluded is reported (n_unscored).
+- Alarm rule: score > threshold.
+- This module reads no files; labels are passed in by the caller (evaluate.py).
 """
 
 import math
@@ -17,15 +17,15 @@ NAN = float("nan")
 
 
 def alarms_from_scores(scores: np.ndarray, threshold: float) -> np.ndarray:
-    """逐秒报警（bool）。未打分的秒（NaN）不报警。"""
+    """Per-second alarms (bool). Unscored seconds (NaN) never alarm."""
     scores = np.asarray(scores, dtype=np.float64)
     return np.greater(scores, threshold, where=~np.isnan(scores), out=np.zeros(scores.shape, dtype=bool))
 
 
 def point_metrics(scores: np.ndarray, labels: np.ndarray, threshold: float) -> dict:
-    """逐点 Precision / Recall / F1 / AUROC。
+    """Point-wise Precision / Recall / F1 / AUROC.
 
-    没有报警时 precision 为 NaN；没有正样本时 recall、F1、AUROC 为 NaN（无法定义，不记为 0）。
+    precision is NaN when there are no alarms; recall, F1 and AUROC are NaN when there are no positives (undefined, not recorded as 0).
     """
     scores, labels = np.asarray(scores, dtype=np.float64), np.asarray(labels).astype(bool)
     if scores.shape != labels.shape:
@@ -36,7 +36,7 @@ def point_metrics(scores: np.ndarray, labels: np.ndarray, threshold: float) -> d
     tp, fp, fn = int((pred & y).sum()), int((pred & ~y).sum()), int((~pred & y).sum())
     precision = tp / (tp + fp) if tp + fp else NAN
     recall = tp / (tp + fn) if tp + fn else NAN
-    f1 = 2 * tp / (2 * tp + fp + fn) if tp + fn else NAN  # 有正样本但没有报警时 F1 = 0，precision 为 NaN
+    f1 = 2 * tp / (2 * tp + fp + fn) if tp + fn else NAN  # With positives but no alarms, F1 = 0 and precision is NaN
     auroc = float(roc_auc_score(y, s)) if 0 < y.sum() < len(y) else NAN
     return {"precision": precision, "recall": recall, "f1": f1, "auroc": auroc,
             "tp": tp, "fp": fp, "fn": fn, "tn": int((~pred & ~y).sum()),
@@ -45,13 +45,13 @@ def point_metrics(scores: np.ndarray, labels: np.ndarray, threshold: float) -> d
 
 
 def event_metrics(files: list[tuple[np.ndarray, np.ndarray]], threshold: float, merge_gap_s: int = 0):
-    """事件级指标。files 为每个测试文件的 (scores, labels)；事件与报警段都不跨文件。
+    """Event-level metrics. files holds (scores, labels) of each test file; neither events nor alarm segments cross files.
 
-    - 事件 = 标签为 1 的连续区间；检出 = 区间内至少有一秒报警。
-    - 检测延迟 = 事件内首次报警的时间 − 事件开始时间，只统计检出的事件。
-    - 误报率 = 不与任何事件重叠的报警段数 ÷ 正常时长（小时）；正常时长只计已打分且标签为 0 的秒。
+    - Event = contiguous interval where the label is 1; detected = at least one alarm second within the interval.
+    - Detection delay = time of the first alarm within the event − event start, only over detected events.
+    - False-alarm rate = alarm segments overlapping no event ÷ normal duration (hours); normal duration counts only scored seconds with label 0.
 
-    返回 (汇总 dict, 事件明细 list, 报警段明细 list)，明细中的 start / end 是文件内的行号（闭区间）。
+    Returns (summary dict, per-event list, per-alarm-segment list); start / end in the details are row numbers within the file (closed interval).
     """
     events, alarms, normal_s = [], [], 0
     for k, (scores, labels) in enumerate(files):
@@ -85,7 +85,7 @@ def event_metrics(files: list[tuple[np.ndarray, np.ndarray]], threshold: float, 
 
 
 def wilson_interval(k: int, n: int, z: float = 1.959964) -> tuple[float, float]:
-    """二项比例 k / n 的 Wilson 置信区间（默认 95%）。n = 0 时返回 (NaN, NaN)。"""
+    """Wilson confidence interval of the binomial proportion k / n (95% by default). Returns (NaN, NaN) when n = 0."""
     if n <= 0:
         return float("nan"), float("nan")
     phat = k / n
@@ -96,6 +96,6 @@ def wilson_interval(k: int, n: int, z: float = 1.959964) -> tuple[float, float]:
 
 
 def precision_at_k(relevant_in_rank_order, k: int) -> float:
-    """排序后前 k 条中为真的比例；不足 k 条时按实际条数计算，没有任何条目时为 NaN。"""
+    """Fraction of true items among the top k after sorting; with fewer than k items the actual count is used, NaN when there are none."""
     top = list(relevant_in_rank_order)[:k]
     return sum(bool(x) for x in top) / len(top) if top else float("nan")

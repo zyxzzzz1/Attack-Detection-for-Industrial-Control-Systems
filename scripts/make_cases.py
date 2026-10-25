@@ -1,15 +1,15 @@
-"""I1：从真实报警中按固定规则挑 3 个案例，写 reports/main/cases.md，并把对应的告警卡片存到 reports/main/cases/。
+"""I1: pick 3 cases from the real alerts by fixed rules, write reports/main/cases.md, and save the corresponding alert cards to reports/main/cases/.
 
-挑选规则（按融合优先级的排名从前往后找，各取第一条；不人工挑选）：
-1. 归因正确的真实攻击：与攻击事件重叠、Top-1 传感器所属子系统在事件的子系统集合内。
-2. 归因错误的真实攻击：与攻击事件重叠、Top-1 传感器所属子系统不在事件的子系统集合内。
-3. 高优先级的误报：不与任何攻击事件重叠。
+Selection rules (walk the fusion priority ranking from the top and take the first match of each; no manual picking):
+1. Real attack, correct attribution: overlaps an attack event and the Top-1 sensor's subsystem is in the event's subsystem set.
+2. Real attack, wrong attribution: overlaps an attack event and the Top-1 sensor's subsystem is not in the event's subsystem set.
+3. High-priority false alarm: overlaps no attack event.
 
-输入：fusion.enriched_alerts_json（先运行 python -m src.pipeline）、reports/main/attribution.csv（python -m src.attribution）、
-主模型运行目录的 eval_events.csv。"是否真实攻击、归因是否命中"取自归因评估和 evaluate 的输出，本脚本不读取标签；
-告警卡片本身不含这些信息。
+Inputs: fusion.enriched_alerts_json (run python -m src.pipeline first), reports/main/attribution.csv (python -m src.attribution),
+eval_events.csv of the main-model run. "Real attack or not, attribution hit or not" come from the attribution evaluation and evaluate outputs; this script reads no labels;
+the alert cards themselves do not contain this information.
 
-用法：
+Usage:
     python -m scripts.make_cases
 """
 
@@ -33,7 +33,7 @@ CASES = [("归因正确的真实攻击", lambda r: r.category == "evaluable" and
 
 
 def load_table(cfg: dict) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
-    """每条报警一行：融合排名 + 归因评估结果。两边按报警段顺序一一对应，起止时间对不上就报错。"""
+    """One row per alert: fusion rank + attribution evaluation result. The two sides correspond one-to-one in alarm-segment order; a start/end mismatch raises an error."""
     ml, fcfg = cfg["ml"], cfg["fusion"]
     model = ml["alerts"]["model"]
     run_dir = artifact_dir(cfg) / model
@@ -109,7 +109,7 @@ def describe(title: str, row, alert: dict, events: pd.DataFrame, n_total: int, c
 
 
 def observations(picked: dict) -> list[str]:
-    """三个案例放在一起能看到的现象；每一条只在数据确实如此时才写。"""
+    """Observations visible when the three cases are read together; each is written only if the data actually supports it."""
     out = []
     if 2 in picked:
         row, alert = picked[2]
@@ -163,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     by_id = {a["alert_id"]: a for a in enriched["alerts"]}
     n_total = len(enriched["alerts"])
 
-    i18n.configure(cfg)   # 显示语言（ui.lang）
+    i18n.configure(cfg)   # Display language (ui.lang)
     lines = [f"# {t('案例')}", "",
              "> " + t("资产映射与漏洞数据来自实验环境，仅用于演示") + t("。")
              + t("资产映射是人为构造的，漏洞数据来自自建靶机的扫描，与 HAI 中的攻击没有因果关系；"

@@ -1,16 +1,16 @@
-"""把逐秒的 0/1 序列合并成区间。报警段与事件共用这一个函数（主线补充决策 6）。
+"""Merge a per-second 0/1 sequence into intervals. Alarm segments and events share this one function (main-line decision 6).
 
-evaluate.py 的事件级统计和 scripts/export_alerts.py 都必须调用 to_segments，保证两处对"一段报警"的定义相同。
+Both the event-level statistics of evaluate.py and scripts/export_alerts.py must call to_segments, so both use the same definition of "an alarm segment".
 """
 
 import numpy as np
 
 
 def to_segments(binary, merge_gap_s: int = 0) -> list[tuple[int, int]]:
-    """返回 [(start, end), ...]，下标为闭区间（start、end 都是取值为 1 的秒），按时间排序。
+    """Return [(start, end), ...] with closed-interval indices (start and end are both seconds with value 1), in time order.
 
-    merge_gap_s = 0（默认）只合并连续的 1；大于 0 时，两段之间为 0 的秒数不超过 merge_gap_s 也合并成一段。
-    输入必须是逐秒连续的一个文件（或一段），不要把多个文件拼起来再传入。
+    merge_gap_s = 0 (default) merges only consecutive 1s; when greater than 0, two runs separated by at most merge_gap_s zeros are also merged into one.
+    The input must be a single file (or part) contiguous per second; do not concatenate several files before passing them in.
     """
     if merge_gap_s < 0:
         raise ValueError("merge_gap_s 不能为负")
@@ -31,5 +31,5 @@ def to_segments(binary, merge_gap_s: int = 0) -> list[tuple[int, int]]:
 
 
 def overlaps(a: tuple[int, int], b: tuple[int, int]) -> bool:
-    """两个闭区间是否有公共的秒。"""
+    """Whether two closed intervals share a second."""
     return a[0] <= b[1] and b[0] <= a[1]

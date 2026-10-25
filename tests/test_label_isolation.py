@@ -1,10 +1,10 @@
-"""标签隔离：src/ 下只有白名单文件可以引用标签模块或出现字符串 "attack"（主线补充决策 2）。"""
+"""Label isolation: under src/ only whitelisted files may reference the label module or contain the string "attack" (main-line decision 2)."""
 
 import re
 
 from src.utils.paths import ROOT
 
-# 白名单：标签模块本身、最终评估、归因命中率评估。后两个文件在后续阶段创建，创建前不存在也不影响本测试。
+# Whitelist: the label module itself, the final evaluation, the attribution hit-rate evaluation. The latter two are created in later stages; their absence before then does not affect this test.
 WHITELIST = {"src/eval/labels.py", "src/evaluate.py", "src/attribution.py"}
 LABEL_MODULE_RE = re.compile(r"eval\.labels|eval\s+import\s+[^\n]*\blabels\b|^\s*(from|import)\s+\.?labels\b", re.M)
 

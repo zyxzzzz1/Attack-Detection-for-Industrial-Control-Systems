@@ -1,14 +1,14 @@
-"""告警融合打分与排序（claude.md M9 第 4~6 条），输出 enriched_alerts.json。
+"""Alert fusion scoring and ranking (claude.md M9 items 4~6), producing enriched_alerts.json.
 
 - S        = clip(max_score / threshold − 1, 0, 1)
-- w_sub    = 该子系统 Top-k 传感器误差占比之和 / 可识别传感器占比之和（和为 1）；
-             前缀无法识别的传感器不参与加权，列入 unmapped_sensors
+- w_sub    = sum of the Top-k error shares of the subsystem's sensors / sum of the shares of recognizable sensors (summing to 1);
+             sensors with an unrecognized prefix are excluded from the weighting and listed in unmapped_sensors
 - priority = S × Σ_sub w_sub·(1 + alpha·E_sub)·criticality_sub
-             Top-k 全部无法识别时 priority = 0
-- E_sub（告警级）= Σ_sub w_sub·E_sub，逐子系统的值见 subsystems[*].E_sub
-- 未扫描资产标注为未评估（R_asset = null），计算中按 0；路径上有未评估资产时 risk_underestimated = true
+             priority = 0 when none of the Top-k can be recognized
+- E_sub (alert level) = Σ_sub w_sub·E_sub; per-subsystem values are in subsystems[*].E_sub
+- Unscanned assets are marked not assessed (R_asset = null) and count as 0; risk_underestimated = true when the path contains unassessed assets
 
-用法：
+Usage:
     python -m src.fusion.prioritize [--alerts JSON] [--vulns JSON] [--output JSON]
 """
 
@@ -28,7 +28,7 @@ from src.fusion.risk import compute_risk, load_params
 from src.utils.i18n import DISCLAIMER_ZH, disclaimer
 
 ROOT = Path(__file__).resolve().parents[2]
-DISCLAIMER = DISCLAIMER_ZH  # 中文原文；输出中的免责声明按 ui.lang 取 disclaimer()
+DISCLAIMER = DISCLAIMER_ZH  # Chinese original; the disclaimer in the output uses disclaimer() per ui.lang
 VULN_FIELDS = ["asset", "asset_ip", "port", "name", "cvss", "epss", "in_kev", "kev_cves", "qod",
                "r_v", "solution", "solution_type", "nvt_oid"]
 
@@ -39,7 +39,7 @@ class TopK(BaseModel):
 
 
 class Alert(BaseModel):
-    """alerts.json 单条记录（第 8 节数据契约）；额外字段原样保留。"""
+    """A single alerts.json record (section 8 data contract); extra fields are kept as-is."""
     model_config = ConfigDict(extra="allow")
     alert_id: str
     start: str
@@ -54,7 +54,7 @@ def severity(max_score: float, threshold: float) -> float:
 
 
 def subsystem_weights(topk: list[TopK], graph: AssetGraph) -> tuple[dict[str, float], list[str]]:
-    """按误差占比聚合到子系统并归一化；返回 (weights, unmapped_sensors)。"""
+    """Aggregate error shares per subsystem and normalize; returns (weights, unmapped_sensors)."""
     raw: dict[str, float] = defaultdict(float)
     unmapped = []
     for t in topk:
@@ -93,7 +93,7 @@ def enrich_alert(alert: Alert, graph: AssetGraph, risk: dict, params: dict) -> d
     review = [r for r in risk["needs_review"] if r["asset"] in path_assets]
     unassessed = [a for a in path_assets if not risk["assets"][a]["assessed"]]
 
-    # 第 8 节：时间字段保留 HAI 原始字符串，内部转为 pandas Timestamp
+    # Section 8: time fields keep the HAI raw strings and are converted to pandas Timestamp internally
     start, end = pd.Timestamp(alert.start), pd.Timestamp(alert.end)
     if end < start:
         raise ValueError(f"{alert.alert_id} 的 end 早于 start")
@@ -109,7 +109,7 @@ def enrich_alert(alert: Alert, graph: AssetGraph, risk: dict, params: dict) -> d
         "priority": s * factor,
         "path": [{"subsystem": sid, "path": p} for sid in weights for p in graph.intrusion_paths(sid)],
         "path_assets": [{"asset": a, **risk["assets"][a]} for a in path_assets],
-        # 路径上有未评估（未扫描）资产时，E_sub 按 0 计入，实际风险可能被低估
+        # When the path has unassessed (unscanned) assets, their E_sub counts as 0 and the actual risk may be underestimated
         "unassessed_assets": unassessed,
         "risk_underestimated": bool(unassessed),
         "vulns": [_vuln_view(r) for r in vulns],

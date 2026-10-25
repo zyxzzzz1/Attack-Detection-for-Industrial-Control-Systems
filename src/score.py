@@ -1,14 +1,14 @@
-"""打分阶段：输出逐秒异常分数（窗口分数赋给窗口最后一秒，每段前 W−1 秒为 NaN）。
+"""Scoring stage: output per-second anomaly scores (each window's score is assigned to its last second; the first W−1 seconds of each segment are NaN).
 
-产物（运行目录下）：
-    scores_val_thr.npy        (T_val,)   val_thr 的逐秒分数，只用于计算阈值
-    scores_test.npy           (T,)       全部 test 文件按配置顺序拼接；每个文件的前 W−1 秒为 NaN
-    per_sensor_err_test.npy   (T, D)     仅重构类模型
-    test_index.json           各 test 文件在拼接数组中的位置、特征名、窗口长度
+Artifacts (in the run directory):
+    scores_val_thr.npy        (T_val,)   per-second val_thr scores, used only to compute the threshold
+    scores_test.npy           (T,)       all test files concatenated in config order; the first W−1 seconds of each file are NaN
+    per_sensor_err_test.npy   (T, D)     reconstruction models only
+    test_index.json           position of each test file in the concatenated array, feature names, window length
 
-这里只读取 test 文件的传感器列；标签只在评估阶段读取。
+Only the sensor columns of the test files are read here; labels are read only in the evaluation stage.
 
-用法：
+Usage:
     python -m src.score --model pca [--smoke]
 """
 
@@ -25,12 +25,12 @@ TEST_INDEX = "test_index.json"
 
 
 def per_second(ds: WindowDataset, values: np.ndarray | None) -> np.ndarray | None:
-    """逐窗口的值 → 各段拼接后的逐秒数组（未打分处为 NaN）。"""
+    """Per-window values -> per-second array over all segments concatenated (NaN where unscored)."""
     return None if values is None else np.concatenate(ds.scatter(values))
 
 
 def score_val_thr(ctx) -> tuple[np.ndarray, np.ndarray | None]:
-    """val_thr 的逐秒分数与逐传感器误差。诊断阶段和打分阶段共用，同一次运行内只算一次。"""
+    """Per-second scores and per-sensor errors of val_thr. Shared by the diagnose and score stages, computed only once per run."""
     if "val_thr" not in ctx.state:
         ds = ctx.dataset("val_thr")
         scores, per_sensor = ctx.ensure_model().score(ds)

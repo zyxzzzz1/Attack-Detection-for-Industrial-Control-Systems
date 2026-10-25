@@ -1,17 +1,17 @@
-# 作业脚本的公共部分，由 cluster/*.sbatch source。不要直接执行。
-# 调用前需设置：SMOKE（1 = 本地冒烟，不经过调度器；0 = 集群作业）。
-# 设置：ROOT、SMOKE_ARGS，导出 HAI_DATA_DIR / ARTIFACT_DIR，激活虚拟环境并切到代码目录。
+# Shared part of the job scripts, sourced by cluster/*.sbatch. Do not execute directly.
+# Must be set before sourcing: SMOKE (1 = local smoke run without the scheduler; 0 = cluster job).
+# Sets ROOT and SMOKE_ARGS, exports HAI_DATA_DIR / ARTIFACT_DIR, activates the virtualenv and cds into the code directory.
 
 _common_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "${_common_dir}/cluster_env.sh"
 
 if [[ "${SMOKE}" == "1" ]]; then
-    # 冒烟：用脚本所在的代码目录和其中的 .venv；产物写到 smoke/ 子目录，与正式产物分开
+    # Smoke: use the code directory containing this script and its .venv; artifacts go to the smoke/ subdirectory, separate from official ones
     ROOT="$(cd "${_common_dir}/.." && pwd)"
     VENV_DIR="${ROOT}/.venv"
     if [[ -n "${SLURM_JOB_ID:-}" && "${CLUSTER_TODO_COUNT}" == "0" ]]; then
-        # 在集群上通过 srun 做冒烟（登录节点上不允许直接跑）：数据和产物用集群上的目录
+        # Smoke run on the cluster via srun (not allowed directly on the login node): data and artifacts use the cluster directories
         export HAI_DATA_DIR="${HAI_DATA_DIR:-${CLUSTER_DATA_DIR}}"
         export ARTIFACT_DIR="${ARTIFACT_DIR:-${CLUSTER_ARTIFACT_DIR}/smoke}"
     else
@@ -40,13 +40,13 @@ cd "${ROOT}"
 source "${VENV_DIR}/bin/activate"
 mkdir -p "${ARTIFACT_DIR}"
 
-# Minerva 上没有申请 GPU 的作业也能看到节点上的显卡（设备没有被隔离）：没申请就把显卡藏起来，
-# 避免 CPU 作业（PCA、IsolationForest、CPU 版 pytest）占用别人申请的 GPU。申请了 GPU 时 Slurm 会设置这个变量。
+# On Minerva, jobs that did not request a GPU can still see the node's GPUs (devices are not isolated): hide them when none was requested,
+# so CPU jobs (PCA, IsolationForest, CPU pytest) do not use GPUs requested by others. Slurm sets this variable when a GPU is requested.
 if [[ -n "${SLURM_JOB_ID:-}" && -z "${CUDA_VISIBLE_DEVICES+x}" ]]; then
     export CUDA_VISIBLE_DEVICES=""
 fi
 
-# 线程数不超过申请的 CPU 数
+# Thread count must not exceed the number of requested CPUs
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-${OMP_NUM_THREADS:-4}}"
 export MKL_NUM_THREADS="${OMP_NUM_THREADS}"
 export PYTHONUNBUFFERED=1

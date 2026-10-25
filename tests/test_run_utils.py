@@ -1,4 +1,4 @@
-"""C0：运行环境公共部分（配置覆盖、哈希、manifest、线程 / 进程数、随机种子）与 run_model 入口的测试。"""
+"""C0: tests of the shared run-environment code (config overrides, hashing, manifest, thread / worker counts, random seeds) and the run_model entry point."""
 
 import copy
 import json
@@ -14,7 +14,7 @@ from src.utils.paths import load_config
 from src.utils.run import (RunManifest, ablation_grid, apply_overrides, config_hash, git_commit, resolve_num_workers,
                            seed_everything)
 
-MANIFEST_REQUIRED = {  # CLAUDE.md"可移植性"与 C0 要求的字段
+MANIFEST_REQUIRED = {  # Fields required by "Portability" in CLAUDE.md and by C0
     "git_commit", "config_hash", "hyperparameters", "python", "versions", "device", "device_name", "hostname",
     "started_at", "finished_at", "final_epoch", "early_stop_epoch", "slurm_job_id", "slurm_array_task_id", "node",
     "gpu_nvidia_smi", "segments", "status", "smoke", "seed",
@@ -45,9 +45,9 @@ def test_ablation_grid_is_3x3_with_fixed_numbering():
     grid = ablation_grid(cfg)
     assert [(g["window"], g["hidden"]) for g in grid] == [(w, h) for w in (30, 60, 120) for h in (32, 64, 128)]
     assert [g["index"] for g in grid] == list(range(9))
-    assert grid[4]["run_name"] == "ablation/lstm_ae_w60_h64"  # 任务 4 = 主模型配置
+    assert grid[4]["run_name"] == "ablation/lstm_ae_w60_h64"  # Task 4 = main-model configuration
     assert grid[8]["overrides"] == ["ml.window.length=120", "ml.models.lstm_ae.hidden=128"]
-    # 覆盖项指向的键确实存在于配置结构中
+    # The keys targeted by overrides really exist in the config structure
     out = apply_overrides(cfg, grid[0]["overrides"])
     assert out["ml"]["window"]["length"] == 30 and out["ml"]["models"]["lstm_ae"]["hidden"] == 32
 
@@ -92,9 +92,9 @@ def test_manifest_fields_slurm_and_resume_segments(tmp_path, monkeypatch):
     assert set(m.data["versions"]) == {"torch", "sklearn", "numpy", "pandas"}
     assert m.data["status"] == "running" and m.data["finished_at"] is None
     m.update(final_epoch=7)
-    m.finish("interrupted")  # 第一段作业到时限被终止
+    m.finish("interrupted")  # The first job segment is killed at its time limit
 
-    # 第二段作业（重新提交后续训）：保留首次开始时间与已记录的 epoch，逐段留痕
+    # The second job segment (resubmitted, resuming): keeps the first start time and the recorded epochs, with one record per segment
     monkeypatch.setenv("SLURM_JOB_ID", "1002")
     m2 = RunManifest(tmp_path)
     m2.start(cfg, model="lstm_ae", run_name="lstm_ae", smoke=False, overrides=[], argv=["--resume"])
@@ -108,11 +108,11 @@ def test_manifest_fields_slurm_and_resume_segments(tmp_path, monkeypatch):
     assert (saved["final_epoch"], saved["early_stop_epoch"]) == (23, 18) and "train" in saved["stages"]
 
 
-# ---------- run_model 入口（合成数据）----------
+# ---------- run_model entry point (synthetic data) ----------
 
 @pytest.fixture
 def tiny_data(tmp_path, monkeypatch):
-    """按真实文件名写 8 个很小的文件，用 HAI_DATA_DIR / ARTIFACT_DIR 指过去。"""
+    """Write 8 tiny files under the real file names and point HAI_DATA_DIR / ARTIFACT_DIR at them."""
     cfg = load_config()
     rng = np.random.default_rng(0)
     data = tmp_path / "data"
@@ -147,14 +147,14 @@ def test_run_model_ablation_index_sets_run_name_and_overrides(tiny_data):
     m = json.loads((tiny_data / "ablation" / "lstm_ae_w30_h32" / "run_manifest.json").read_text(encoding="utf-8"))
     assert m["model"] == "lstm_ae" and m["hyperparameters"]["window"]["length"] == 30
     assert m["hyperparameters"]["models"]["lstm_ae"]["hidden"] == 32
-    # 不同组合的配置哈希不同
+    # Different combinations have different config hashes
     assert run_model.main(["--ablation-index", "1", "--set", "ml.data.drop_train_overlap=false"]) == 0
     m1 = json.loads((tiny_data / "ablation" / "lstm_ae_w30_h64" / "run_manifest.json").read_text(encoding="utf-8"))
     assert m1["config_hash"] != m["config_hash"]
 
 
 def test_run_model_failure_is_recorded_in_manifest(tiny_data):
-    # 窗口比任何一段都长：prepare 阶段报错，manifest 记为 failed
+    # Window longer than every segment: the prepare stage fails and the manifest records failed
     with pytest.raises(RuntimeError, match="窗口"):
         run_model.main(["--model", "pca", "--set", "ml.data.drop_train_overlap=false", "--set", "ml.window.length=5000"])
     m = json.loads((tiny_data / "pca" / "run_manifest.json").read_text(encoding="utf-8"))

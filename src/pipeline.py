@@ -1,17 +1,17 @@
-"""扩展部分一键流水线：parse → intel → prioritize → render。
+"""One-command pipeline of the extension part: parse -> intel -> prioritize -> render.
 
-1. parse：     vuln.report_xmls（OpenVAS XML，可多份）→ vuln.vulns_json
-2. intel：     vulns_json + KEV/EPSS → vuln.vulns_enriched_json（--offline 时只用 data/intel/ 缓存）
-3. prioritize：fusion.alerts_json + vulns_enriched_json + 资产图 → fusion.enriched_alerts_json
-4. render：    enriched_alerts_json → fusion.cards_dir（Markdown/HTML 卡片 + 索引页）
+1. parse:      vuln.report_xmls (OpenVAS XML, possibly several) -> vuln.vulns_json
+2. intel:      vulns_json + KEV/EPSS -> vuln.vulns_enriched_json (with --offline only the data/intel/ cache is used)
+3. prioritize: fusion.alerts_json + vulns_enriched_json + asset graph -> fusion.enriched_alerts_json
+4. render:     enriched_alerts_json -> fusion.cards_dir (Markdown/HTML cards + index page)
 
-报警输入默认是真实报警（LSTM-AE 的全部报警段，scripts.export_alerts 导出）；融合打分对全部报警进行，
-卡片只为优先级最高的前 fusion.max_rendered_alerts 条生成。--mock 改用 mock 报警，输出写到
-fusion.mock_enriched_alerts_json 和 fusion.mock_cards_dir，不覆盖真实报警的输出。
+The alert input defaults to the real alerts (all LSTM-AE alarm segments, exported by scripts.export_alerts); fusion scoring covers all alerts,
+cards are generated only for the top fusion.max_rendered_alerts by priority. --mock uses the mock alerts instead, writing to
+fusion.mock_enriched_alerts_json and fusion.mock_cards_dir without overwriting the real-alert output.
 
-任一步失败即停止，返回非 0；所有路径与参数来自 config/*.yaml。
+Stops at the first failing step and returns non-zero; all paths and parameters come from config/*.yaml.
 
-用法：
+Usage:
     python -m src.pipeline [--offline] [--mock] [--format md|html|both] [--config config/config.yaml]
 """
 
@@ -38,8 +38,8 @@ def _strip_time(data):
 
 
 def _write_json(path: Path, data) -> bool:
-    """写 JSON；若已有文件除 generated_at 外内容相同则不改写（避免已提交的快照被无意义地改动）。
-    返回是否写入。"""
+    """Write JSON; if an existing file has the same content apart from generated_at, leave it untouched (so committed snapshots are not changed pointlessly).
+    Returns whether the file was written."""
     if path.exists():
         try:
             old = json.loads(path.read_text(encoding="utf-8"))
@@ -52,15 +52,15 @@ def _write_json(path: Path, data) -> bool:
     return True
 
 
-MAX_RANKING_PRINTED = 10  # 第 3 步在终端打印的排名条数（真实报警有上千条）
+MAX_RANKING_PRINTED = 10  # Number of ranked alerts printed to the terminal in step 3 (there are over a thousand real alerts)
 
 
 def run(cfg: dict, offline: bool = False, formats: tuple[str, ...] = ("md", "html"), session=None,
         mock: bool = False) -> dict:
-    """按顺序执行四步，返回各步摘要；出错时抛出异常。"""
+    """Run the four steps in order and return a summary of each; raises on error."""
     vcfg, fcfg = cfg["vuln"], cfg["fusion"]
     summary = {}
-    i18n.configure(cfg)   # 显示语言（ui.lang）：只影响卡片和索引页的文字
+    i18n.configure(cfg)   # Display language (ui.lang): affects only the text of the cards and the index page
 
     # 1. parse
     srcs = [ROOT / x for x in vcfg["report_xmls"]]
@@ -99,7 +99,7 @@ def run(cfg: dict, offline: bool = False, formats: tuple[str, ...] = ("md", "htm
           + " > ".join(f"{a['alert_id']} {a['priority']:.3f}" for a in shown)
           + (f" > …（其余 {len(result['alerts']) - len(shown)} 条略）" if len(result["alerts"]) > len(shown) else ""))
 
-    # 4. render：只为优先级最高的前 N 条生成卡片
+    # 4. render: generate cards only for the top N by priority
     limit = fcfg.get("max_rendered_alerts") or None
     cards_dir = ROOT / fcfg[f"{prefix}cards_dir"]
     written = render_all(result, make_env(ROOT / fcfg["templates_dir"]), cards_dir, list(formats), limit)

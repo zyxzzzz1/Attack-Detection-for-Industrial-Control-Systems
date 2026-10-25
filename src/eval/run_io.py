@@ -1,4 +1,4 @@
-"""读取一个运行目录里的打分产物（不涉及标签）。"""
+"""Read the scoring artifacts in a run directory (label-free)."""
 
 import json
 from dataclasses import dataclass
@@ -13,10 +13,10 @@ from src.utils.run import MANIFEST_NAME
 class RunArtifacts:
     directory: Path
     manifest: dict
-    index: dict            # test_index.json：各段在拼接数组中的位置、特征名、窗口长度
+    index: dict            # test_index.json: position of each part in the concatenated array, feature names, window length
     threshold: dict        # threshold.json
     scores: np.ndarray     # (T,)
-    per_sensor_err: np.ndarray | None  # (T, D)，按需内存映射
+    per_sensor_err: np.ndarray | None  # (T, D), memory-mapped on demand
 
     @property
     def features(self) -> list[str]:

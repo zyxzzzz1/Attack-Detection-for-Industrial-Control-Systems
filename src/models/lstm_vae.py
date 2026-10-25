@@ -1,12 +1,12 @@
-"""LSTM 变分自编码器（主线补充决策 5）。
+"""LSTM variational autoencoder (main-line decision 5).
 
-编码器 LSTM 的最后隐状态 → μ、logσ²（latent 维）→ 重参数化得到 z → 重复 W 次 → 解码器 LSTM → Linear。
-损失 = 重构 + β·KL（β 来自 config，默认 1.0），两项都按"每个窗口"计：
-    重构 = 0.5 × 窗口内全部元素的平方误差之和（单位方差高斯的负对数似然，去掉常数）
-    KL   = KL(q(z|x) ‖ N(0, I))，对 latent 各维求和
-再对一批窗口取平均。两项用同一尺度（都是求和），β = 1 时就是负 ELBO。
-打分时不采样（z = μ），分数 = 窗口 MSE（重构误差），口径与 LSTM-AE 相同；同样输出最后一秒的逐传感器平方误差。
-验证损失（早停依据）同样用 z = μ 计算，不受采样噪声影响。
+Last hidden state of the encoder LSTM -> μ, logσ² (latent dim) -> reparameterize to z -> repeat W times -> decoder LSTM -> Linear.
+Loss = reconstruction + β·KL (β from config, default 1.0), both counted "per window":
+    reconstruction = 0.5 × sum of squared errors over all elements of the window (negative log-likelihood of a unit-variance Gaussian, constants dropped)
+    KL             = KL(q(z|x) ‖ N(0, I)), summed over latent dimensions
+then averaged over the batch of windows. Both terms are on the same scale (both sums), so with β = 1 this is the negative ELBO.
+Scoring does not sample (z = μ); score = window MSE (reconstruction error), the same definition as LSTM-AE; it likewise outputs the per-sensor squared error of the last second.
+The validation loss (used for early stopping) also uses z = μ, so it is free of sampling noise.
 """
 
 import torch

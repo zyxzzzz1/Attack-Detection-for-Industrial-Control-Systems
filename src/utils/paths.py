@@ -1,8 +1,8 @@
-"""配置读取与路径解析：所有路径来自 config，相对路径相对项目根目录；数据目录和产物目录可用环境变量覆盖。
+"""Config loading and path resolution: all paths come from the config, relative paths are relative to the project root; the data and artifact directories can be overridden by environment variables.
 
-环境变量（本地与集群共用一份代码，约定见 CLAUDE.md"可移植性"）：
-- HAI_DATA_DIR  覆盖 ml.data_dir
-- ARTIFACT_DIR  覆盖 ml.artifact_dir
+Environment variables (one codebase for local and cluster, see "Portability" in CLAUDE.md):
+- HAI_DATA_DIR  overrides ml.data_dir
+- ARTIFACT_DIR  overrides ml.artifact_dir
 """
 
 import os
@@ -20,7 +20,7 @@ def load_config(path: Path = DEFAULT_CONFIG) -> dict:
 
 
 def resolve(path: str | Path) -> Path:
-    """相对路径按项目根目录解析，绝对路径原样返回。"""
+    """Resolve relative paths against the project root; absolute paths are returned unchanged."""
     p = Path(path).expanduser()
     return p if p.is_absolute() else ROOT / p
 

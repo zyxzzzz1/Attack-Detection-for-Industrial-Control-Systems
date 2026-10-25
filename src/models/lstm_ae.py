@@ -1,7 +1,7 @@
-"""LSTM 自编码器（主模型，主线补充决策 5；主模型配置固定为 W=60、hidden=64，约束 9）。
+"""LSTM autoencoder (main model, main-line decision 5; main-model configuration fixed at W=60, hidden=64, constraint 9).
 
-编码器 LSTM 取最后一层的最后隐状态 → 重复 W 次 → 解码器 LSTM → Linear 回到特征维。
-分数 = 窗口 MSE（W×D 个元素的均值）；per_sensor_err = 窗口最后一秒各传感器的平方误差。
+Encoder LSTM takes the last hidden state of the last layer -> repeated W times -> decoder LSTM -> Linear back to the feature dimension.
+Score = window MSE (mean over W×D elements); per_sensor_err = squared error of each sensor at the window's last second.
 """
 
 import torch

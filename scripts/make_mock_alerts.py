@@ -1,10 +1,10 @@
-"""生成 mock 报警 data/mock/alerts.json（主线完成前代替 alerts.json，每条带 is_mock: true）。
+"""Generate the mock alerts data/mock/alerts.json (stand-in for alerts.json before the main line is done; each with is_mock: true).
 
-5 条报警覆盖：单子系统、跨两个子系统、刚过阈值、严重报警（S 截断到 1），外加一条涉及 P4（HIL）的跨子系统报警。
-传感器名全部来自 HAI 21.03 实际列名（data/samples/hai_columns.txt），写出前逐一校验。
-分数、阈值、时间均为虚构值，不代表任何模型的真实输出。
+The 5 alerts cover: a single subsystem, two subsystems, just above the threshold, a severe alert (S clipped to 1), plus a cross-subsystem alert involving P4 (HIL).
+All sensor names come from the actual HAI 21.03 columns (data/samples/hai_columns.txt) and are validated one by one before writing.
+Scores, thresholds and times are fictitious and do not represent the real output of any model.
 
-用法：
+Usage:
     python -m scripts.make_mock_alerts [--output JSON]
 """
 
@@ -17,9 +17,9 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-THRESHOLD = 0.0845  # 虚构阈值
+THRESHOLD = 0.0845  # Fictitious threshold
 
-# (alert_id, 场景, start, end, max_score / threshold, [(sensor, share)])
+# (alert_id, scenario, start, end, max_score / threshold, [(sensor, share)])
 CASES = [
     ("MOCK-001", "单子系统（P1）", "2020-07-15 10:02:10", "2020-07-15 10:05:39", 1.5,
      [("P1_FT03", 0.40), ("P1_LIT01", 0.25), ("P1_FCV03D", 0.15), ("P1_PIT01", 0.12), ("P1_TIT01", 0.08)]),
@@ -35,7 +35,7 @@ CASES = [
 
 
 def load_sensor_names(path: Path) -> set[str]:
-    """从 hai_columns.txt 中取出传感器列（标注为 [P?] 的行）。"""
+    """Extract the sensor columns (lines marked [P?]) from hai_columns.txt."""
     names = set()
     for line in path.read_text(encoding="utf-8").splitlines():
         m = re.match(r"^\s*\d+\s+\[P\d+\]\s+(\S+)$", line)

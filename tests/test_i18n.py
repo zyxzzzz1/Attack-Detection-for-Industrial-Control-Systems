@@ -1,4 +1,4 @@
-"""界面与报告素材的英文化（ui.lang）：只改显示文字，不改任何计算、字段名和数字。"""
+"""English localization of the UI and report material (ui.lang): only display text changes, never any computation, field name or number."""
 
 import json
 import re
@@ -43,15 +43,15 @@ def test_default_language_is_english_and_can_be_overridden(monkeypatch):
     assert cfg["ui"]["lang"] == "en"
     use(monkeypatch, None)
     assert i18n.get_lang() == "en" and i18n.t("告警") == "Alert"
-    i18n.configure({"ui": {"lang": "zh"}})           # 调用方传入的 config
+    i18n.configure({"ui": {"lang": "zh"}})           # Config passed by the caller
     assert i18n.get_lang() == "zh" and i18n.t("告警") == "告警"
-    monkeypatch.setenv(i18n.ENV_VAR, "en")           # 环境变量优先
+    monkeypatch.setenv(i18n.ENV_VAR, "en")           # The environment variable takes precedence
     assert i18n.get_lang() == "en"
     monkeypatch.setenv(i18n.ENV_VAR, "fr")
     with pytest.raises(ValueError):
         i18n.get_lang()
     use(monkeypatch, "en")
-    with pytest.raises(KeyError):                    # 英文缺译直接报错，不悄悄退回中文
+    with pytest.raises(KeyError):                    # A missing English translation raises an error instead of silently falling back to Chinese
         i18n.t("这句话没有译文")
     assert i18n.t_data("没有译文的数据文字") == "没有译文的数据文字" and i18n.t_data(None) is None
 
@@ -64,7 +64,7 @@ def test_disclaimer_is_translated_exactly(monkeypatch):
 
 
 def test_catalog_is_complete_and_keeps_placeholders_and_digits():
-    """译文表与代码、模板里的显示文字一一对应；占位符相同；译文不引入也不丢掉任何数字；译文里没有中文。"""
+    """The translation table matches the display text in code and templates one-to-one; placeholders are identical; translations neither add nor drop numbers; translations contain no Chinese."""
     catalog = yaml.safe_load(i18n.CATALOG.read_text(encoding="utf-8"))
     need = i18n_keys.required_keys()
     assert sorted(need - set(catalog)) == [] and sorted(set(catalog) - need) == []
@@ -88,7 +88,7 @@ def fusion_inputs():
 
 
 def strip_text(obj):
-    """去掉只是显示文字的字段（免责声明、生成时间），其余用于逐项比较。"""
+    """Drop the fields that are only display text (disclaimer, generation time) and compare the rest item by item."""
     if isinstance(obj, dict):
         return {k: strip_text(v) for k, v in obj.items() if k not in ("disclaimer", "generated_at")}
     if isinstance(obj, list):
@@ -98,14 +98,14 @@ def strip_text(obj):
 
 @pytest.mark.parametrize("source", ["real", "mock"])
 def test_fusion_output_and_cards_have_identical_numbers_in_both_languages(monkeypatch, tmp_path, source):
-    """同一批报警，中文、英文各生成一次：融合打分的 JSON 除免责声明外逐项相同（字段名、排名、全部数值）；
-    卡片和索引页里出现的数字完全相同；英文版没有中文残留。"""
+    """Generate the same alerts once in Chinese and once in English: the fusion JSON is identical item by item apart from the disclaimer (field names, ranks, all values);
+    the numbers in the cards and the index page are exactly the same; no Chinese remains in the English version."""
     graph, params, vulns, alerts = fusion_inputs()
     results, texts = {}, {}
     for lang in ("zh", "en"):
         use(monkeypatch, lang)
         results[lang] = prioritize(alerts[source], vulns, graph, params)
-        # 生成时间不参与比较：两次渲染跨过整秒时，页面上的时间数字会不同
+        # The generation time is not compared: if the two renders straddle a second boundary, the time shown on the page differs
         results[lang]["generated_at"] = "2026-01-01T00:00:00+00:00"
         out = tmp_path / lang
         render_all(results[lang], make_env(ROOT / "templates"), out, ["md", "html"], 8)
@@ -142,7 +142,7 @@ def run_app(monkeypatch, lang: str | None):
 
 
 def test_streamlit_is_english_by_default_with_same_values(monkeypatch):
-    """不设 UI_LANG 时按 config 的默认值显示英文；与中文界面相比列表里的数值、告警编号、排名完全相同。"""
+    """Without UI_LANG the config default (English) is shown; compared with the Chinese UI, the values, alert IDs and ranks in the list are exactly the same."""
     en = run_app(monkeypatch, None)
     assert en.title[0].value == "Process anomaly + vulnerability context: fused alerts"
     assert any(EN_DISCLAIMER in c.value for c in en.caption) and not en.warning
@@ -161,7 +161,7 @@ def test_streamlit_is_english_by_default_with_same_values(monkeypatch):
     for a, b in (("Priority", "Priority"), ("分数 / 阈值", "Score / threshold"), ("S", "S"), ("E_sub", "E_sub"),
                  ("需核实的 KEV 漏洞", "KEV vulns needing review"), ("起始时间", "Start time")):
         assert list(df_zh[a]) == list(df_en[b])
-    for a, b in ((zh.dataframe[1], en.dataframe[1]), (zh.table[0], en.table[0])):   # 资产风险、子系统暴露风险两张表：数值相同
+    for a, b in ((zh.dataframe[1], en.dataframe[1]), (zh.table[0], en.table[0])):   # Asset risk and subsystem exposure risk tables: identical values
         assert a.value.shape == b.value.shape
         assert numbers(a.value.to_csv()) == numbers(b.value.to_csv())
     sub = en.table[0].value
@@ -176,7 +176,7 @@ def test_streamlit_is_english_by_default_with_same_values(monkeypatch):
 
 
 def test_cases_text_has_identical_numbers_in_both_languages(monkeypatch):
-    """案例文档：同样的输入，中英文里出现的数字相同，英文版没有中文。"""
+    """Case document: for the same input, the numbers are identical in Chinese and English, and the English version contains no Chinese."""
     def alert(aid, rank, score, subs):
         return {"alert_id": aid, "rank": rank, "priority": 1.4122, "S": 1.0, "E_sub": 0.677, "start": "2020-07-28 12:43:22",
                 "end": "2020-07-28 12:47:18", "duration_s": 237, "max_score": score, "threshold": 0.2369,
@@ -202,13 +202,13 @@ def test_cases_text_has_identical_numbers_in_both_languages(monkeypatch):
     assert numbers(out["zh"]) == numbers(out["en"]) and not CJK.search(out["en"]), CJK.findall(out["en"])[:10]
     assert "Case 2 — a real attack with wrong attribution: X-2" in out["en"] and "is a false alarm" in out["en"]
     assert "案例 2　归因错误的真实攻击：X-2" in out["zh"] and "capped at 1" in out["en"]
-    # P4 与 P1、P2、P3 都有耦合（HAI 官方说明：P3 的泵和阀由抽水蓄能发电模型控制）
+    # P4 is coupled with P1, P2 and P3 (official HAI description: the pumps and valves of P3 are controlled by the pumped-storage hydropower model)
     assert "P4 与 P1、P2、P3 都有物理耦合" in out["zh"] and "建议同时排查 P1 / P2 / P3。" in out["zh"]
     assert "coupled with P1, P2 and P3" in out["en"] and "investigating P1 / P2 / P3 as well" in out["en"]
 
 
 def test_p4_note_and_exposure_text_on_real_cards(monkeypatch, tmp_path):
-    """涉及 P4 的真实报警卡片：说明里写明 P4 与 P1、P2、P3 都有耦合；P4 的 E_sub 写法与子系统表一致。"""
+    """A real alert card involving P4: the note states that P4 is coupled with P1, P2 and P3; P4's E_sub wording matches the subsystem table."""
     graph, params, vulns, alerts = fusion_inputs()
     assert "P1、P2、P3" in graph.subsystems["P4"].note and graph.subsystems["P4"].note.count("P1/P2/P3") == 2
     for lang, note, esub in (("zh", "建议同时排查 P1/P2/P3 相关资产", "E_sub = 0.000（无控制链：HIL 仿真）"),
@@ -225,7 +225,7 @@ def test_p4_note_and_exposure_text_on_real_cards(monkeypatch, tmp_path):
 
 
 def test_committed_cases_and_card_snapshots_are_in_the_default_language():
-    """入库的案例文档和三张案例卡片按默认语言（英文）生成，带逐句准确的免责声明。"""
+    """The tracked case document and the three case cards are generated in the default language (English), with the accurately translated disclaimer."""
     report = ROOT / load_config()["ml"]["report_dir"]
     files = [report / "cases.md", *sorted((report / "cases").glob("*.md"))]
     assert len(files) == 4

@@ -1,6 +1,6 @@
-"""运行环境的公共部分：配置覆盖与哈希、随机种子、设备检测、线程 / 进程数、运行目录与 run_manifest.json。
+"""Shared run-environment code: config overrides and hashing, random seeds, device detection, thread / worker counts, run directory and run_manifest.json.
 
-本地与集群共用（可移植性约定见 CLAUDE.md）。超参数不因设备不同而改变；这里只记录运行环境。
+Shared by local and cluster runs (portability conventions in CLAUDE.md). Hyperparameters never change with the device; this only records the environment.
 """
 
 import copy
@@ -23,7 +23,7 @@ import yaml
 from src.utils.paths import ROOT, artifact_dir
 
 MANIFEST_NAME = "run_manifest.json"
-GIT_COMMIT_FILE = ".git_commit"  # push_to_cluster.sh 写入：集群上的代码目录没有 .git 时从这里读取提交号
+GIT_COMMIT_FILE = ".git_commit"  # Written by push_to_cluster.sh: read the commit hash from here when the code directory on the cluster has no .git
 SLURM_KEYS = {"job_id": "SLURM_JOB_ID", "array_job_id": "SLURM_ARRAY_JOB_ID", "array_task_id": "SLURM_ARRAY_TASK_ID",
               "job_name": "SLURM_JOB_NAME", "partition": "SLURM_JOB_PARTITION", "node": "SLURMD_NODENAME",
               "cpus_per_task": "SLURM_CPUS_PER_TASK"}
@@ -33,10 +33,10 @@ def now() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 
 
-# ---------- 配置 ----------
+# ---------- Config ----------
 
 def apply_overrides(cfg: dict, overrides: list[str]) -> dict:
-    """按 "a.b.c=value" 覆盖配置（value 按 YAML 解析），返回新字典，不修改原配置。中间层级不存在时创建。"""
+    """Override the config with "a.b.c=value" (value parsed as YAML); returns a new dict without modifying the original. Missing intermediate levels are created."""
     out = copy.deepcopy(cfg)
     for item in overrides:
         if "=" not in item:
@@ -53,12 +53,12 @@ def apply_overrides(cfg: dict, overrides: list[str]) -> dict:
 
 
 def config_hash(cfg: dict) -> str:
-    """配置内容的 sha256（键排序后的 JSON），与键的书写顺序无关。"""
+    """sha256 of the config content (JSON with sorted keys), independent of the order keys are written in."""
     return hashlib.sha256(json.dumps(cfg, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
 def ablation_grid(cfg: dict) -> list[dict]:
-    """消融网格（行优先：先遍历 windows，再遍历 hiddens）。每项含 job array 任务号、运行名与配置覆盖项。"""
+    """Ablation grid (row-major: windows outer, hiddens inner). Each item holds the job array task index, run name and config overrides."""
     ab = cfg["ml"]["ablation"]
     grid = []
     for w in ab["windows"]:
@@ -69,10 +69,10 @@ def ablation_grid(cfg: dict) -> list[dict]:
     return grid
 
 
-# ---------- 随机种子、设备、线程 ----------
+# ---------- Random seeds, device, threads ----------
 
 def seed_everything(seed: int) -> None:
-    """固定 python、numpy、torch 的随机种子；有 GPU 时令 cuDNN 走确定性路径。"""
+    """Fix the random seeds of python, numpy and torch; with a GPU, make cuDNN take the deterministic path."""
     import torch
     random.seed(seed)
     np.random.seed(seed)
@@ -83,13 +83,13 @@ def seed_everything(seed: int) -> None:
 
 
 def detect_device():
-    """有 GPU 用第一块 GPU（只申请一块，不写多 GPU 代码），否则用 CPU。"""
+    """Use the first GPU if there is one (only one is requested; no multi-GPU code), otherwise the CPU."""
     import torch
     return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 def available_cpus() -> int:
-    """作业可用的 CPU 数：优先取 SLURM_CPUS_PER_TASK，其次取进程的 CPU 亲和集合。"""
+    """Number of CPUs available to the job: SLURM_CPUS_PER_TASK first, then the process's CPU affinity set."""
     slurm = os.environ.get("SLURM_CPUS_PER_TASK")
     if slurm and slurm.isdigit():
         return max(1, int(slurm))
@@ -97,19 +97,19 @@ def available_cpus() -> int:
 
 
 def resolve_num_workers(requested: int) -> int:
-    """DataLoader 进程数不超过作业申请的 CPU 数。"""
+    """DataLoader workers never exceed the CPUs requested by the job."""
     return max(0, min(int(requested), available_cpus()))
 
 
 def limit_threads() -> int:
-    """把 torch 的线程数限制在作业申请的 CPU 数以内（集群节点的核数远多于申请数）。"""
+    """Limit torch's thread count to the CPUs requested by the job (cluster nodes have far more cores than requested)."""
     import torch
     n = available_cpus()
     torch.set_num_threads(n)
     return n
 
 
-# ---------- 环境信息 ----------
+# ---------- Environment info ----------
 
 def git_commit(root: Path = ROOT) -> dict:
     try:
@@ -129,7 +129,7 @@ def git_commit(root: Path = ROOT) -> dict:
 
 
 def nvidia_smi() -> list[str] | None:
-    """nvidia-smi 查询到的 GPU（型号、显存、驱动版本）；没有 nvidia-smi 时返回 None。"""
+    """GPUs reported by nvidia-smi (model, memory, driver version); None when nvidia-smi is unavailable."""
     if not shutil.which("nvidia-smi"):
         return None
     try:
@@ -169,17 +169,17 @@ def environment_info() -> dict:
     }
 
 
-# ---------- 运行目录、日志、manifest ----------
+# ---------- Run directory, log, manifest ----------
 
 def run_dir(cfg: dict, run_name: str) -> Path:
-    """运行目录 = 产物根目录 / 运行名（主模型为模型名，消融为 ablation/<名字>）。"""
+    """Run directory = artifact root / run name (the model name for main models, ablation/<name> for the ablation)."""
     d = artifact_dir(cfg) / run_name
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
 def setup_logging(directory: Path, name: str = "run") -> logging.Logger:
-    """日志同时写到标准输出和运行目录下的 run.log（追加，续训时接着写）。"""
+    """Log to both stdout and run.log in the run directory (appending, so resumed runs continue the same file)."""
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
@@ -192,10 +192,10 @@ def setup_logging(directory: Path, name: str = "run") -> logging.Logger:
 
 
 class RunManifest:
-    """run_manifest.json：一次运行的可复现信息。
+    """run_manifest.json: reproducibility information of one run.
 
-    顶层字段描述整次运行（最近一段作业的环境、配置、结果）；segments 逐段记录每次启动
-    （断点续训、--dependency 串接的多段作业各占一项），因此被中断的作业也留有记录。
+    Top-level fields describe the run as a whole (environment, config and result of the latest job segment); segments records every launch
+    (resumed runs and jobs chained with --dependency each get an entry), so interrupted jobs leave a record too.
     """
 
     def __init__(self, directory: Path) -> None:

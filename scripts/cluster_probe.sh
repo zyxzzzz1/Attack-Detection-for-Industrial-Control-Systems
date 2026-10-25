@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# 查询集群信息（runbook 第 1 步），用于补全 config/cluster.yaml。
-# 在本地执行：ssh minerva 'bash -l -s' < scripts/cluster_probe.sh > artifacts/cluster_probe.txt 2>&1
-# 登录节点上只做轻量查询；最后两条通过 srun 在计算节点上执行，各约几秒。
+# Query cluster information (runbook step 1) to fill in config/cluster.yaml.
+# Run locally: ssh minerva 'bash -l -s' < scripts/cluster_probe.sh > artifacts/cluster_probe.txt 2>&1
+# Only lightweight queries on the login node; the last two run on a compute node via srun, a few seconds each.
 set -u
 
 echo "== 用户与目录 =="
@@ -30,7 +30,7 @@ echo "== 登录节点能否上网 =="
 curl -sI --max-time 10 https://github.com | head -1
 [[ "${PIPESTATUS[0]}" == "0" ]] || echo "登录节点不能上网"
 
-# srun 加 </dev/null：否则它会把本脚本剩余部分当作标准输入读走
+# srun gets </dev/null: otherwise it would consume the rest of this script as its stdin
 echo "== 计算节点能否上网 =="
 srun --time=00:02:00 bash -c 'hostname; curl -sI --max-time 10 https://pypi.org | head -1; [[ "${PIPESTATUS[0]}" == "0" ]] || echo "计算节点不能上网"' </dev/null
 

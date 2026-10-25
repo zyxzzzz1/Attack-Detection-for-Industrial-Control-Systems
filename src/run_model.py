@@ -1,23 +1,23 @@
-"""一个模型的完整运行入口：准备数据 → 训练 → 打分 → 阈值 → 评估。集群作业脚本（cluster/*.sbatch）只调用这里。
+"""Entry point for a complete run of one model: prepare data -> train -> score -> threshold -> evaluate. The cluster job scripts (cluster/*.sbatch) call only this.
 
-每次运行在 产物目录/<运行名>/ 下写 run_manifest.json、run.log 和各阶段的产物。带 --resume 时，已有 checkpoint
-就从断点继续，没有就从头开始，所以作业被中断后原样重新提交即可。
+Each run writes run_manifest.json, run.log and each stage's artifacts under <artifact dir>/<run name>/. With --resume, an existing checkpoint
+is resumed and otherwise the run starts from scratch, so an interrupted job can simply be resubmitted unchanged.
 
-阶段（--stages，默认按顺序执行全部阶段；每个阶段也可以单独执行，需要的东西从运行目录读取）：
-    prepare    读取 train 文件、切分、fit 预处理，保存 scaler.joblib 与 preprocess.json（不读取 test）
-    train      在 train 部分上拟合模型，val_es 只用于早停（src/train.py）
-    diagnose   只用 val_thr 的重尾特征诊断；单个传感器占比超限时在读取 test 之前停下（src/diagnose.py）
-    score      给 val_thr 和 test 打分（只读传感器列，src/score.py）
-    threshold  阈值 = val_thr 分数的分位数（src/threshold.py）
-    evaluate   唯一读取 test 标签的阶段：逐点与事件级指标（src/evaluate.py）
+Stages (--stages; by default all stages run in order; each can also run on its own, reading what it needs from the run directory):
+    prepare    read train files, split, fit preprocessing, save scaler.joblib and preprocess.json (test is not read)
+    train      fit the model on the train part, val_es used only for early stopping (src/train.py)
+    diagnose   heavy-tail feature diagnosis on val_thr only; stops before reading test if a single sensor's share exceeds the limit (src/diagnose.py)
+    score      score val_thr and test (sensor columns only, src/score.py)
+    threshold  threshold = quantile of the val_thr scores (src/threshold.py)
+    evaluate   the only stage that reads test labels: point-wise and event-level metrics (src/evaluate.py)
 
-退出码：0 完成；3 诊断超限，停下等待决定（run_manifest.json 的 status 为 stopped_for_review）。
+Exit codes: 0 done; 3 diagnosis over the limit, stopped awaiting a decision (status stopped_for_review in run_manifest.json).
 
-用法：
+Usage:
     python -m src.run_model --model lstm_ae [--resume] [--set ml.window.length=30 ...]
-    python -m src.run_model --model lstm_ae --ablation-index 0 --resume     # 消融网格的第 0 个组合
-    python -m src.run_model --model pca --smoke                               # 1% 数据、1 个 epoch，只检查流程
-    python -m src.run_model --list-ablation                                   # 打印消融网格与任务号
+    python -m src.run_model --model lstm_ae --ablation-index 0 --resume     # combination 0 of the ablation grid
+    python -m src.run_model --model pca --smoke                               # 1% of the data, 1 epoch, pipeline check only
+    python -m src.run_model --list-ablation                                   # print the ablation grid and task indices
 """
 
 import argparse
@@ -34,12 +34,12 @@ from src.utils.run import (RunManifest, ablation_grid, apply_overrides, config_h
                            run_dir, seed_everything, setup_logging)
 
 EXIT_STOPPED_FOR_REVIEW = 3
-# 本地诊断运行允许的阶段：都不读取 test 文件
+# Stages allowed in a local diagnostic run: none of them read test files
 LOCAL_DIAGNOSTIC_STAGES = ("prepare", "train", "diagnose")
 
 
 def stage_prepare(ctx: RunContext) -> dict:
-    """读取 train 文件并 fit 预处理（只看 train 部分），保存 scaler 与摘要。不读取 test 文件。"""
+    """Read train files and fit preprocessing (train part only); save the scaler and summary. Does not read test files."""
     ctx.data = prepare_train(ctx.cfg, ctx.fraction)
     summary = ctx.data.summary()
     summary["windows"] = {split: len(ctx.dataset(split)) for split in ctx.data.segments}
@@ -52,7 +52,7 @@ def stage_prepare(ctx: RunContext) -> dict:
     return {"rows": summary["rows"], "n_features": summary["n_features"], "windows": summary["windows"]}
 
 
-# 阶段表：按执行顺序排列。diagnose 必须排在 score 之前（超限时要在读取 test 之前停下）。
+# Stage table in execution order. diagnose must come before score (when over the limit it must stop before test is read).
 STAGES = {"prepare": stage_prepare, "train": train.run, "diagnose": diagnose.run, "score": score.run,
           "threshold": threshold.run, "evaluate": evaluate.run}
 
@@ -127,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     previous = manifest.data
     if (args.resume and args.stages == "all" and previous.get("status") == "completed"
             and previous.get("config_hash") == config_hash(cfg) and not previous.get("smoke") and not args.smoke):
-        # --dependency=afterany 串接的后一段作业：前一段已经用同样的配置跑完，无事可做
+        # A follow-up job chained with --dependency=afterany: the previous job already finished with the same config, nothing to do
         log.info("运行 %s 已经用相同的配置完成（%s），无事可做", run_name or args.model, previous.get("finished_at"))
         return 0
     manifest.start(cfg, model=args.model, run_name=run_name or args.model, smoke=args.smoke, overrides=overrides,
@@ -156,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
         manifest.finish("stopped_for_review")
         log.warning("停下等待决定：%s", e)
         return EXIT_STOPPED_FOR_REVIEW
-    except BaseException as e:  # 包括被调度器终止（KeyboardInterrupt / SystemExit）：记录后原样抛出
+    except BaseException as e:  # Including termination by the scheduler (KeyboardInterrupt / SystemExit): record it and re-raise unchanged
         manifest.finish("failed" if isinstance(e, Exception) else "interrupted")
         log.error("运行中止：%r", e)
         raise

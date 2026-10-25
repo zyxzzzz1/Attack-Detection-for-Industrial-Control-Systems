@@ -1,9 +1,9 @@
-"""训练阶段：在 train 部分上拟合模型，val_es 只用于早停（主线补充决策 1）。不读取 val_thr 和 test。
+"""Training stage: fit the model on the train part; val_es is used only for early stopping (main-line decision 1). Reads neither val_thr nor test.
 
-带 --resume 且运行目录里已有训练好的模型时直接读取，不重新训练；LSTM 类模型训练到一半被中断时从最近的
-checkpoint 接着训练（见 src/models/torch_base.py）。所以作业被中断后原样重新提交即可。
+With --resume and an already trained model in the run directory, it is loaded instead of retrained; an LSTM model interrupted mid-training continues
+from the latest checkpoint (see src/models/torch_base.py). So an interrupted job can simply be resubmitted unchanged.
 
-用法：
+Usage:
     python -m src.train --model pca [--smoke] [--resume] [--set key=value]
 """
 
@@ -20,7 +20,7 @@ def run(ctx) -> dict:
         model.load(ctx.directory)
         ctx.state["model"] = model
         ctx.log.info("运行目录里已有训练好的模型，直接读取，不重新训练")
-        previous = ctx.manifest.data.get("stages", {}).get("train", {})  # 保留上次训练的摘要
+        previous = ctx.manifest.data.get("stages", {}).get("train", {})  # Keep the summary of the previous training
         return {**{k: v for k, v in previous.items() if k not in ("seconds", "finished_at")}, "resumed": True}
     summary = model.fit(ctx.dataset("train"), ctx.dataset("val_es")) or {}
     model.save(ctx.directory)

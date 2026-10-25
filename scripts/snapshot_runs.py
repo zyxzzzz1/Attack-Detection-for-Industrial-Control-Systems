@@ -1,19 +1,19 @@
-"""把报告引用到的各次运行的小文件从产物目录复制到 reports/main/runs/（入库），让报告里的每个数字都能在仓库里查到来源。
-由 scripts.make_key_numbers 在汇总关键数字之前自动调用，也可以单独运行。
+"""Copy the small files of each run cited by the report from the artifact directory to reports/main/runs/ (tracked), so every number in the report can be traced in the repository.
+Called automatically by scripts.make_key_numbers before collecting key numbers; can also be run on its own.
 
-复制的文件：eval_metrics.json、run_manifest.json、threshold.json、preprocess.json、train_log.csv（没有的跳过，
-例如 PCA 没有 train_log.csv）。不复制分数、逐传感器误差、模型权重、checkpoint 和日志。
-只接受集群上的完整运行（非冒烟、非本地诊断、git_dirty=false、已完成）；不合格的运行跳过并打印原因。
-包括：config 的 ml.models 中全部模型、消融的全部组合、多随机种子的全部运行。
+Files copied: eval_metrics.json, run_manifest.json, threshold.json, preprocess.json, train_log.csv (missing ones are skipped,
+e.g. PCA has no train_log.csv). Scores, per-sensor errors, model weights, checkpoints and logs are not copied.
+Only full runs on the cluster are accepted (not smoke, not local diagnostic, git_dirty=false, completed); other runs are skipped with the reason printed.
+Covers: all models in ml.models of the config, all ablation combinations, all multi-seed runs.
 
-脱敏（仓库将来可能公开；产物目录里的原件不动）：
-- 键名为 hostname、node 的值（计算节点的主机名）一律替换为占位符 <cluster-node>；
-- 任何字符串里出现的集群用户名（cluster.cid）、集群上的绝对路径（paths.*；真实值在不入库的 config/cluster.local.yaml）、
-  登录主机名，以及用户目录形式的路径（集群的 data/users/<名字>、Linux 主目录 home/<名字>），
-  替换为 <cluster-user>、<cluster-path>、<cluster-host>、<user-path>。
-除此之外内容不变：没有命中的文件与原件逐字节相同。测试会核对入库副本 = 对原件做同样脱敏的结果。
+Redaction (the repository may become public; originals in the artifact directory are untouched):
+- values of keys named hostname or node (compute-node host names) are always replaced by the placeholder <cluster-node>;
+- in any string, the cluster user name (cluster.cid), absolute paths on the cluster (paths.*; real values in the untracked config/cluster.local.yaml),
+  the login host name, and user-directory-style paths (the cluster's data/users/<name>, Linux home directories home/<name>)
+  are replaced by <cluster-user>, <cluster-path>, <cluster-host>, <user-path>.
+Nothing else changes: files without matches are byte-identical to the originals. The tests check that tracked copy = original with the same redaction applied.
 
-用法：
+Usage:
     python -m scripts.snapshot_runs
 """
 
@@ -33,7 +33,7 @@ FILES = ["eval_metrics.json", "run_manifest.json", "threshold.json", "preprocess
 SNAPSHOT_SUBDIR = "runs"
 NODE_KEYS = {"hostname", "node"}
 NODE_PLACEHOLDER = "<cluster-node>"
-# 用户目录形式的路径。主目录的前缀拆开写，是因为可移植性测试不允许代码里出现主目录的绝对路径字面量
+# User-directory-style paths. The home-directory prefix is split up because the portability test forbids absolute home-directory literals in code
 USER_PATH_RE = re.compile(r"/(?:data/users|" + "ho" + r"me)/[^/\s\"',:]+")
 
 
@@ -45,12 +45,12 @@ def run_names(cfg: dict) -> list[str]:
 
 
 def scrub_rules(cluster_yaml: Path | None = None) -> list[tuple[str, str]]:
-    """(要替换的字符串, 占位符)，长的在前。来自 cluster.yaml 与同目录的 cluster.local.yaml；值为 TODO 或不存在的项跳过。"""
+    """(string to replace, placeholder), longest first. Taken from cluster.yaml and the cluster.local.yaml next to it; items that are TODO or missing are skipped."""
     path = cluster_yaml or ROOT / "config" / "cluster.yaml"
     if not path.exists():
         return []
     c = yaml.safe_load(path.read_text(encoding="utf-8"))
-    local = path.with_name("cluster.local.yaml")   # 真实的用户名和路径在不入库的本机配置里
+    local = path.with_name("cluster.local.yaml")   # The real user name and paths are in the untracked machine-local config
     if local.exists():
         extra = yaml.safe_load(local.read_text(encoding="utf-8")) or {}
         c = {**c, **{k: {**(c.get(k) or {}), **v} for k, v in extra.items() if isinstance(v, dict)}}
@@ -68,7 +68,7 @@ def scrub_text(text: str, rules: list[tuple[str, str]]) -> str:
 
 
 def scrub_nodes(obj):
-    """递归地把键名为 hostname / node 的非空值替换为占位符。"""
+    """Recursively replace non-empty values of keys named hostname / node with a placeholder."""
     if isinstance(obj, dict):
         return {k: (NODE_PLACEHOLDER if k in NODE_KEYS and v else scrub_nodes(v)) for k, v in obj.items()}
     if isinstance(obj, list):
@@ -77,8 +77,8 @@ def scrub_nodes(obj):
 
 
 def redacted(path: Path, rules: list[tuple[str, str]]) -> str:
-    """入库副本的内容。JSON 中没有任何需要替换的内容时原样返回（与原件逐字节相同）。"""
-    with open(path, encoding="utf-8", newline="") as f:   # newline=""：不改动换行符（train_log.csv 是 \r\n）
+    """Content of the tracked copy. A JSON file with nothing to replace is returned as-is (byte-identical to the original)."""
+    with open(path, encoding="utf-8", newline="") as f:   # newline="": keep line endings unchanged (train_log.csv uses \r\n)
         text = f.read()
     if path.suffix == ".json":
         data = json.loads(text)

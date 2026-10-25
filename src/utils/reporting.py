@@ -1,9 +1,9 @@
-"""报告脚本共用：产物从哪里读、结果写到哪里、哪些运行可以用。
+"""Shared by the report scripts: where artifacts are read from, where results are written, which runs may be used.
 
-两种模式，互不混用：
-- 正式（默认）：读产物根目录下的运行，只接受集群上的完整运行（非冒烟、非本地诊断、git_dirty=false、已完成），写到 ml.report_dir。
-- 冒烟（--smoke）：只读 产物根目录/smoke/ 下的冒烟运行，写到 产物根目录/smoke_reports/。只用于开发和检查流程，
-  数字不得写进报告；这种模式下不会写 reports/main/ 或 data/processed/。
+Two modes that are never mixed:
+- Official (default): reads runs under the artifact root, accepts only full runs on the cluster (not smoke, not local diagnostic, git_dirty=false, completed), writes to ml.report_dir.
+- Smoke (--smoke): reads only smoke runs under <artifact root>/smoke/ and writes to <artifact root>/smoke_reports/. Only for development and pipeline checks;
+  the numbers must not go into the report; in this mode reports/main/ and data/processed/ are never written.
 """
 
 import argparse
@@ -15,7 +15,7 @@ from src.utils.run import MANIFEST_NAME
 
 
 def report_problem(run_dir: Path, ok_status: tuple[str, ...] = ("completed",)) -> str | None:
-    """运行不能用于正式报告的原因；可以用时返回 None。"""
+    """Reason a run cannot be used for the official report; None if it can."""
     path = Path(run_dir) / MANIFEST_NAME
     if not path.exists():
         return "没有 run_manifest.json"
@@ -32,7 +32,7 @@ def report_problem(run_dir: Path, ok_status: tuple[str, ...] = ("completed",)) -
 
 
 def smoke_problem(run_dir: Path) -> str | None:
-    """冒烟模式下运行不能用的原因：必须确实是已完成的冒烟运行。"""
+    """Reason a run cannot be used in smoke mode: it must really be a completed smoke run."""
     path = Path(run_dir) / MANIFEST_NAME
     if not path.exists():
         return "没有 run_manifest.json"
@@ -58,7 +58,7 @@ class ReportSource:
         return smoke_problem(run_dir) if self.smoke else report_problem(run_dir)
 
     def usable_runs(self, run_names: list[str], required: tuple[str, ...] = ()) -> list[str]:
-        """可用的运行名；不可用的打印原因并跳过。required 为必须存在的产物文件。"""
+        """Names of the usable runs; unusable ones are skipped with the reason printed. required lists the artifact files that must exist."""
         ok = []
         for name in run_names:
             run_dir = self.root / name

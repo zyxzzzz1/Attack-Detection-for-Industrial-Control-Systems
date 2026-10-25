@@ -1,7 +1,7 @@
-"""滑窗 Dataset：窗口按需切片，不预先展开；窗口只在段内滑动，不跨越任何段边界（约束 8）。
+"""Sliding-window Dataset: windows are sliced on demand, not materialized in advance; windows slide only within a segment and never cross a segment boundary (constraint 8).
 
-段边界 = 文件边界、train/val 切分点、val 内部切分点（由 load_hai.split_segments 产生）。
-每个窗口的分数赋给窗口的最后一秒；每段的前 W−1 秒没有分数，记为 NaN（scatter）。
+Segment boundaries = file boundaries, the train/val split point and the split point inside val (produced by load_hai.split_segments).
+Each window's score is assigned to its last second; the first W−1 seconds of each segment have no score and are NaN (scatter).
 """
 
 import numpy as np
@@ -15,10 +15,10 @@ class WindowDataset(Dataset):
             raise ValueError("window 与 stride 必须为正整数")
         self.segments = [np.ascontiguousarray(s, dtype=np.float32) for s in segments]
         self.window, self.stride = window, stride
-        # 每段的窗口数；长度不足一个窗口的段没有窗口
+        # Number of windows per segment; segments shorter than one window have none
         self.counts = np.array([max(0, (len(s) - window) // stride + 1) for s in self.segments], dtype=np.int64)
         self.offsets = np.concatenate(([0], np.cumsum(self.counts)))
-        # 每段的滑窗视图（不复制数据），形状 (n−W+1, D, W)
+        # Sliding-window view of each segment (no data copied), shape (n−W+1, D, W)
         self._views = [np.lib.stride_tricks.sliding_window_view(s, window, axis=0) if len(s) >= window else None
                        for s in self.segments]
 
@@ -30,7 +30,7 @@ class WindowDataset(Dataset):
         return int(self.offsets[-1])
 
     def locate(self, idx: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """窗口编号 → （所在段编号, 窗口在段内的起始行）。"""
+        """Window index -> (segment index, start row of the window within the segment)."""
         idx = np.asarray(idx, dtype=np.int64)
         if len(idx) and (idx.min() < 0 or idx.max() >= len(self)):
             raise IndexError("窗口编号越界")
@@ -42,7 +42,7 @@ class WindowDataset(Dataset):
         return torch.from_numpy(self.segments[seg[0]][start[0]:start[0] + self.window])
 
     def get_batch(self, idx: np.ndarray) -> torch.Tensor:
-        """一次取一批窗口，形状 (B, W, D)。只复制这一批。"""
+        """Fetch one batch of windows, shape (B, W, D). Only this batch is copied."""
         seg, start = self.locate(idx)
         out = np.empty((len(seg), self.window, self.n_features), dtype=np.float32)
         for s in np.unique(seg):
@@ -51,7 +51,7 @@ class WindowDataset(Dataset):
         return torch.from_numpy(out)
 
     def iter_batches(self, batch_size: int, shuffle: bool = False, generator: np.random.Generator | None = None):
-        """按批产生 (窗口编号, 批张量)。shuffle 只打乱窗口的顺序，窗口内部的时间顺序不变。"""
+        """Yield (window indices, batch tensor) per batch. shuffle only permutes the order of windows; time order within a window is unchanged."""
         order = np.arange(len(self))
         if shuffle:
             (generator or np.random.default_rng()).shuffle(order)
@@ -60,9 +60,9 @@ class WindowDataset(Dataset):
             yield idx, self.get_batch(idx)
 
     def scatter(self, values: np.ndarray) -> list[np.ndarray]:
-        """把逐窗口的值放回逐秒数组：赋给窗口最后一秒，其余位置（含每段前 W−1 秒）为 NaN。
+        """Put per-window values back into per-second arrays: assigned to each window's last second, NaN elsewhere (including the first W−1 seconds of each segment).
 
-        values 形状 (窗口数,) 或 (窗口数, D)；返回每段一个数组，长度等于该段的秒数。
+        values has shape (n_windows,) or (n_windows, D); returns one array per segment, as long as the segment in seconds.
         """
         values = np.asarray(values)
         if len(values) != len(self):

@@ -1,13 +1,13 @@
-"""LSTM 类模型共用的训练 / 打分流程（LSTM-AE、LSTM-VAE、Deep SVDD）。
+"""Training / scoring loop shared by the LSTM models (LSTM-AE, LSTM-VAE, Deep SVDD).
 
-- Adam、早停看 val_es 损失（主线补充决策 4）；设备自动检测，超参数不因设备不同而改变。
-- 断点续训：每个 epoch 结束后保存 checkpoints/last.pt（模型、优化器、早停状态、随机数状态、训练记录）和
-  checkpoints/epoch_NNN.pt（只含模型权重）；验证损失最好的权重另存为 checkpoints/best.pt。
-  训练结束后把最好的权重写成 model.pt。带 --resume 时：有 model.pt 就直接读取；否则有 last.pt 就从下一个 epoch 接着训练。
-  每个 epoch 的打乱顺序只由（种子, epoch）决定，随机数状态随 checkpoint 保存，所以中断后续训与一次跑完的结果相同（CPU 上逐位一致）。
-- train_log.csv 每个 epoch 一行，含训练 / 验证耗时。
+- Adam, early stopping on the val_es loss (main-line decision 4); device auto-detected, hyperparameters never change with the device.
+- Resumable training: after each epoch save checkpoints/last.pt (model, optimizer, early-stopping state, RNG state, training log) and
+  checkpoints/epoch_NNN.pt (model weights only); the weights with the best validation loss are also saved as checkpoints/best.pt.
+  After training the best weights are written to model.pt. With --resume: load model.pt if present; otherwise continue from the next epoch if last.pt exists.
+  The shuffle order of each epoch depends only on (seed, epoch) and the RNG state is saved with the checkpoint, so resuming after an interruption gives the same result as an uninterrupted run (bit-identical on CPU).
+- train_log.csv has one row per epoch, including training / validation time.
 
-子类实现 build_net、batch_loss、batch_scores，可选 on_fit_start（Deep SVDD 用它确定中心）。
+Subclasses implement build_net, batch_loss and batch_scores, and optionally on_fit_start (Deep SVDD uses it to set the center).
 """
 
 import csv
@@ -27,7 +27,7 @@ TRAIN_LOG = "train_log.csv"
 
 
 def atomic_save(obj, path: Path) -> None:
-    """先写临时文件再改名：作业在保存途中被终止也不会留下损坏的 checkpoint。"""
+    """Write a temporary file and then rename it, so a job killed mid-save never leaves a corrupt checkpoint."""
     tmp = path.with_suffix(path.suffix + ".tmp")
     torch.save(obj, tmp)
     tmp.replace(path)
@@ -46,25 +46,25 @@ class TorchWindowModel:
         self.resume = False
         self.log = logging.getLogger("run")
         self.manifest = None
-        self.extra: dict = {}  # 模型特有、要写进 manifest 的信息（随 checkpoint 保存，续训后不丢）
+        self.extra: dict = {}  # Model-specific information to write into the manifest (saved with the checkpoint, so it survives resuming)
 
-    # ---------- 子类实现 ----------
+    # ---------- Implemented by subclasses ----------
 
     def build_net(self, n_features: int, window: int) -> torch.nn.Module:
         raise NotImplementedError
 
     def batch_loss(self, x: torch.Tensor, training: bool) -> tuple[torch.Tensor, dict]:
-        """返回 (这一批的平均损失, 要记录的各分量)。"""
+        """Return (mean loss of this batch, components to log)."""
         raise NotImplementedError
 
     def batch_scores(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor | None]:
-        """返回 (逐窗口分数 (B,), 窗口最后一秒的逐传感器误差 (B, D) 或 None)。"""
+        """Return (per-window scores (B,), per-sensor errors at the window's last second (B, D) or None)."""
         raise NotImplementedError
 
     def on_fit_start(self, train_ds: WindowDataset) -> None:
-        """从头开始训练之前调用一次（续训时不调用）。"""
+        """Called once before training from scratch (not when resuming)."""
 
-    # ---------- 公共流程 ----------
+    # ---------- Shared loop ----------
 
     def bind(self, directory: Path, resume: bool, log, manifest=None) -> None:
         self.directory, self.resume, self.log, self.manifest = Path(directory), resume, log, manifest
@@ -86,7 +86,7 @@ class TorchWindowModel:
         self.net.load_state_dict(blob["model"])
 
     def _epoch_end_hook(self, epoch: int) -> None:
-        """每个 epoch 的 checkpoint 写完之后调用；测试用它模拟作业被中断。"""
+        """Called after each epoch's checkpoint is written; tests use it to simulate an interrupted job."""
 
     def _mean_loss(self, ds: WindowDataset, batch_size: int) -> tuple[float, dict]:
         self.net.eval()
@@ -113,7 +113,7 @@ class TorchWindowModel:
         state = {"epoch": 0, "best_val": float("inf"), "best_epoch": 0, "bad_epochs": 0, "stopped_early": False,
                  "history": []}
         if self.resume and last_path.exists():
-            # 读到 CPU：torch.set_rng_state 只接受 CPU 上的状态；权重和优化器状态由 load_state_dict 放到模型所在设备
+            # Load onto CPU: torch.set_rng_state only accepts CPU state; weights and optimizer state are moved to the model's device by load_state_dict
             ckpt = torch.load(last_path, map_location="cpu", weights_only=False)
             self.net.load_state_dict(ckpt["model"])
             optimizer.load_state_dict(ckpt["optimizer"])
@@ -136,7 +136,7 @@ class TorchWindowModel:
             t0 = time.time()
             self.net.train()
             total, parts, n = 0.0, {}, 0
-            order_rng = np.random.default_rng([seed, epoch])  # 打乱顺序只由（种子, epoch）决定
+            order_rng = np.random.default_rng([seed, epoch])  # The shuffle order depends only on (seed, epoch)
             for _, x in train_ds.iter_batches(tc["batch_size"], shuffle=True, generator=order_rng):
                 x = x.to(self.device)
                 optimizer.zero_grad(set_to_none=True)
@@ -172,7 +172,7 @@ class TorchWindowModel:
             atomic_save({"model": weights, "optimizer": optimizer.state_dict(), "state": state,
                          "torch_rng": torch.get_rng_state(),
                          "cuda_rng": torch.cuda.get_rng_state_all() if self.device.type == "cuda" else None}, last_path)
-            with open(log_path, "w", newline="", encoding="utf-8") as f:  # 每个 epoch 重写整份记录，续训后不会有重复行
+            with open(log_path, "w", newline="", encoding="utf-8") as f:  # Rewrite the whole log every epoch, so resuming never produces duplicate rows
                 writer = csv.DictWriter(f, fieldnames=list(state["history"][0]))
                 writer.writeheader()
                 writer.writerows(state["history"])

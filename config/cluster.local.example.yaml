@@ -1,10 +1,10 @@
-# 示例：复制为 config/cluster.local.yaml（不入库）并填入自己的值，覆盖 config/cluster.yaml 中的同名项。
-# 然后运行 python -m scripts.make_cluster_jobs，真实的作业脚本生成到 cluster/local/（不入库），
-# scripts/push_to_cluster.sh 会把它们推送到集群上的 cluster/ 目录。
+# Example: copy to config/cluster.local.yaml (not tracked) and fill in your own values; they override the same keys in config/cluster.yaml.
+# Then run python -m scripts.make_cluster_jobs; the real job scripts are generated into cluster/local/ (not tracked),
+# and scripts/push_to_cluster.sh pushes them to the cluster/ directory on the cluster.
 cluster:
-  cid: your-cid                          # 集群登录用户名
+  cid: your-cid                          # Cluster login user name
 paths:
-  code_dir: /path/on/cluster/openvas             # 代码目录（push_to_cluster.sh 的目标）
-  venv_dir: /path/on/cluster/openvas/.venv       # 约定为 <code_dir>/.venv
-  data_dir: /path/on/cluster/hai-21.03           # HAI 数据目录 → HAI_DATA_DIR
-  artifact_dir: /path/on/cluster/openvas_artifacts  # 产物根目录 → ARTIFACT_DIR
+  code_dir: /path/on/cluster/openvas             # Code directory (target of push_to_cluster.sh)
+  venv_dir: /path/on/cluster/openvas/.venv       # By convention <code_dir>/.venv
+  data_dir: /path/on/cluster/hai-21.03           # HAI data directory -> HAI_DATA_DIR
+  artifact_dir: /path/on/cluster/openvas_artifacts  # Artifact root directory -> ARTIFACT_DIR

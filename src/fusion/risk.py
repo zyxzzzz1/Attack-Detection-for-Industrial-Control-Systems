@@ -1,17 +1,17 @@
-"""漏洞风险 → 资产风险 → 子系统暴露风险（claude.md M9 第 1~3 条）。
+"""Vulnerability risk -> asset risk -> subsystem exposure risk (claude.md M9 items 1~3).
 
 - r_v     = min(1, (cvss/10) × (1 + beta·epss) × (gamma if in_kev else 1))
-- R_asset = 该资产所有参与计算的漏洞 r_v 的最大值；已扫描但无漏洞记 0
-- E_sub   = 子系统全部上游资产（见 asset_graph.upstream_assets）的 R_asset 最大值；无上游资产记 0
+- R_asset = maximum r_v over the asset's vulnerabilities that take part in the computation; 0 if scanned with no vulnerabilities
+- E_sub   = maximum R_asset over all upstream assets of the subsystem (see asset_graph.upstream_assets); 0 if there are no upstream assets
 
-未扫描资产 = "未评估"：输出中 R_asset 为 None、assessed 为 False，不显示成 0 风险；
-计算 E_sub 时按 0 处理。子系统记录 unassessed_assets（未评估的上游资产）与 E_sub_assessed
-（是否至少有一个上游资产被评估）。
+Unscanned asset = "not assessed": in the output R_asset is None and assessed is False, never shown as zero risk;
+it counts as 0 when computing E_sub. Subsystem records carry unassessed_assets (unassessed upstream assets) and E_sub_assessed
+(whether at least one upstream asset was assessed).
 
-QoD 规则：qod < min_qod（或缺失）的漏洞不参与计算；其中命中 KEV 的列入 needs_review，
-供告警卡片显示"需人工核实"。
+QoD rule: vulnerabilities with qod < min_qod (or missing) are excluded from the computation; those among them that are in KEV are listed under needs_review
+for the alert card to show "needs manual verification".
 
-用法：
+Usage:
     python -m src.fusion.risk [--vulns JSON]
 """
 
@@ -33,9 +33,9 @@ def vuln_risk(v: dict, beta: float, gamma: float) -> float:
 
 
 def compute_risk(vulns: list[dict], graph: AssetGraph, params: dict) -> dict:
-    """返回 {vulns, needs_review, unmapped_ips, assets, subsystems}。
+    """Return {vulns, needs_review, unmapped_ips, assets, subsystems}.
 
-    vulns / needs_review 中每条记录额外带 asset（资产 id）和 r_v 字段。
+    Each record in vulns / needs_review additionally carries asset (asset id) and r_v.
     """
     min_qod = params["min_qod"]
     scored, needs_review, unmapped = [], [], set()
@@ -49,7 +49,7 @@ def compute_risk(vulns: list[dict], graph: AssetGraph, params: dict) -> dict:
             scored.append(rec)
         elif v["in_kev"]:
             needs_review.append(rec)
-    # r_v 相同（常见于截断到 1）时依次按 KEV、CVSS、EPSS 排序
+    # With equal r_v (common when clipped to 1), sort by KEV, then CVSS, then EPSS
     order = lambda r: (-r["r_v"], not r["in_kev"], -r["cvss"], -r["epss"])  # noqa: E731
     scored.sort(key=order)
     needs_review.sort(key=order)
@@ -72,7 +72,7 @@ def compute_risk(vulns: list[dict], graph: AssetGraph, params: dict) -> dict:
         }
 
     def risk_or_zero(aid: str) -> float:
-        # 未评估资产在计算中按 0 处理
+        # Unassessed assets count as 0 in the computation
         return assets[aid]["R_asset"] or 0.0
 
     subsystems = {}

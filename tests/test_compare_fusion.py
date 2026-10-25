@@ -1,4 +1,4 @@
-"""scripts/compare_fusion.py 的测试：构造前后两次融合结果。"""
+"""Tests of scripts/compare_fusion.py: builds a before and an after fusion result."""
 
 from scripts.compare_fusion import compare
 

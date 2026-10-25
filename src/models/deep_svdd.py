@@ -1,10 +1,10 @@
-"""Deep SVDD（单类，主线补充决策 5）。
+"""Deep SVDD (one-class, main-line decision 5).
 
-LSTM 编码器（去掉所有 bias，不用带 affine 的归一化层）→ 最后隐状态 → 无 bias 的 Linear → 表示向量。
-中心 c = 未训练的网络在全部训练窗口上输出的均值；绝对值小于 eps 的分量设为 ±eps（保留符号，0 取 +eps），之后固定。
-去掉 bias 并让 c 远离 0，是为了排除"所有输入都映射到同一个点"的平凡解。
-损失 = 到 c 的平方距离的均值；分数 = 到 c 的平方距离。不输出逐传感器误差，不参与归因。
-坍塌检查：threshold 阶段记录 val_thr 分数的方差与变异系数，接近 0 时给出警告。
+LSTM encoder (all biases removed, no normalization layers with affine parameters) -> last hidden state -> bias-free Linear -> representation vector.
+Center c = mean output of the untrained network over all training windows; components with absolute value below eps are set to ±eps (sign kept, 0 becomes +eps), then fixed.
+Removing biases and keeping c away from 0 rules out the trivial solution of mapping every input to the same point.
+Loss = mean squared distance to c; score = squared distance to c. No per-sensor errors, no attribution.
+Collapse check: the threshold stage records the variance and coefficient of variation of the val_thr scores and warns when they are close to 0.
 """
 
 import torch
@@ -19,7 +19,7 @@ class SVDDEncoder(nn.Module):
         super().__init__()
         self.encoder = nn.LSTM(n_features, hidden, num_layers=layers, batch_first=True, bias=False)
         self.proj = nn.Linear(hidden, rep_dim, bias=False)
-        self.register_buffer("center", torch.zeros(rep_dim))  # 随模型一起保存，训练中不更新
+        self.register_buffer("center", torch.zeros(rep_dim))  # Saved with the model, not updated during training
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         _, (h, _) = self.encoder(x)
@@ -34,7 +34,7 @@ class DeepSVDDModel(TorchWindowModel):
         return SVDDEncoder(n_features, p["hidden"], p["layers"], p["rep_dim"])
 
     def on_fit_start(self, train_ds: WindowDataset) -> None:
-        """用初始网络的前向输出确定中心 c，之后固定。"""
+        """Determine the center c from the initial network's forward output, then keep it fixed."""
         eps = self.params["eps"]
         self.net.eval()
         total, n = torch.zeros_like(self.net.center, dtype=torch.float64), 0
@@ -44,7 +44,7 @@ class DeepSVDDModel(TorchWindowModel):
                 total += out.double().sum(dim=0)
                 n += len(x)
         c = (total / n).float()
-        raw = c.abs()  # 替换之前的 |c|：记进 manifest，用来判断中心是否几乎只剩符号
+        raw = c.abs()  # |c| before replacement: recorded in the manifest to judge whether the center is little more than signs
         small = c.abs() < eps
         c[small] = torch.where(c[small] < 0, -eps, eps)
         self.net.center.copy_(c)

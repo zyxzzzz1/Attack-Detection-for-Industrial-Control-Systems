@@ -1,4 +1,4 @@
-"""src/pipeline.py 的端到端测试：真实 XML 报告 + mock 报警，输出与情报缓存全部指向临时目录，不联网。"""
+"""End-to-end test of src/pipeline.py: real XML report + mock alerts, with all outputs and the intel cache pointed at a temporary directory; no network."""
 
 import copy
 import csv
@@ -26,7 +26,7 @@ def real_cves() -> list[str]:
 
 @pytest.fixture
 def cfg(tmp_path) -> dict:
-    """真实配置，但所有输出与缓存改到 tmp_path（ROOT / 绝对路径 == 绝对路径）。"""
+    """The real config, but all outputs and caches moved to tmp_path (ROOT / absolute path == absolute path)."""
     c = copy.deepcopy(yaml.safe_load((ROOT / "config" / "config.yaml").read_text(encoding="utf-8")))
     c["vuln"]["vulns_json"] = str(tmp_path / "vulns.json")
     c["vuln"]["vulns_enriched_json"] = str(tmp_path / "vulns_enriched.json")
@@ -73,7 +73,7 @@ def test_rerun_keeps_snapshot_if_unchanged(cfg, tmp_path, real_cves):
     run(cfg, offline=True, formats=("md",), mock=True)
     before = (tmp_path / "vulns_enriched.json").read_text(encoding="utf-8")
     run(cfg, offline=True, formats=("md",), mock=True)
-    # generated_at 不同但内容相同 → 不改写
+    # Different generated_at but same content -> not rewritten
     assert (tmp_path / "vulns_enriched.json").read_text(encoding="utf-8") == before
 
 
@@ -105,12 +105,12 @@ def test_cli_exit_codes(cfg, tmp_path, monkeypatch):
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
     monkeypatch.setattr("sys.argv", ["pipeline", "--config", str(path), "--offline"])
-    assert main() == 3  # 无缓存 → intel 失败
+    assert main() == 3  # No cache -> intel fails
 
 
 def test_real_alerts_are_default_and_only_top_n_rendered(cfg, tmp_path, real_cves):
-    """默认读真实报警（data/processed/alerts.json，is_mock=false）：全部参与融合打分，只为前 N 条生成卡片；
-    mock 的输出在另一个目录，互不覆盖。"""
+    """Real alerts by default (data/processed/alerts.json, is_mock=false): all take part in fusion scoring, cards only for the top N;
+    the mock output is in another directory, so neither overwrites the other."""
     write_caches(tmp_path, real_cves)
     real = json.loads((ROOT / cfg["fusion"]["alerts_json"]).read_text(encoding="utf-8"))
     assert len(real) > 50 and not any(a["is_mock"] for a in real) and {a["model"] for a in real} == {"lstm_ae"}
@@ -127,7 +127,7 @@ def test_real_alerts_are_default_and_only_top_n_rendered(cfg, tmp_path, real_cve
     card = (tmp_path / "real" / "cards" / cards[0]).read_text(encoding="utf-8")
     assert f"优先级第 1 / {len(real)}" in card and "占全部传感器误差的比例" in card and "仅用于演示" in card
 
-    # 换成更小的 N 再跑：上一次多出来的卡片被清掉
+    # Run again with a smaller N: the extra cards from the previous run are removed
     cfg["fusion"]["max_rendered_alerts"] = 1
     run(cfg, offline=True, formats=("md",))
     assert len(list((tmp_path / "real" / "cards").iterdir())) == 2

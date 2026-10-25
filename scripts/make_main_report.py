@@ -1,16 +1,16 @@
-"""用同步回来的集群产物生成主线报告素材到 reports/main/（入库）。
+"""Generate the main-line report material into reports/main/ (tracked) from cluster artifacts synced back.
 
-输出：
-- main_results.csv / .md       主结果表，每个已评估的模型一行（M2a 为 PCA、IsolationForest 两行）
-- main_results_seeds.csv       多随机种子（ml.seed_study，只对主模型配置的 LSTM-AE）逐种子的结果与均值、标准差；
-                               全部种子的运行都可用时，主表 .md 中该模型的 F1、AUROC、事件检出率、误报率写成"均值 ± 标准差"
-- val_sensor_contrib.csv / .png  PCA 在 val_thr 上各传感器对重构 MSE 的平均贡献占比（只依据 val_thr）
+Output:
+- main_results.csv / .md       main results table, one row per evaluated model (in M2a: PCA and IsolationForest)
+- main_results_seeds.csv       multiple random seeds (ml.seed_study, only LSTM-AE in the main-model configuration): per-seed results with mean and std;
+                               when all seed runs are available, F1, AUROC, event recall and false-alarm rate of that model in the .md table are written as "mean ± std"
+- val_sensor_contrib.csv / .png  average share of each sensor in the PCA reconstruction MSE on val_thr (based on val_thr only)
 
-只接受集群上的完整运行：run_manifest.json 中 smoke=false、git_dirty=false、status=completed
-（诊断表还接受 stopped_for_review）。不满足的运行被拒绝并说明原因；--allow-unofficial 只用于测试，
-此时必须同时用 --output-dir 指向 reports/main 以外的目录。
+Only full runs on the cluster are accepted: smoke=false, git_dirty=false, status=completed in run_manifest.json
+(the diagnosis table also accepts stopped_for_review). Other runs are rejected with the reason; --allow-unofficial is only for tests
+and must be combined with --output-dir pointing somewhere other than reports/main.
 
-用法：
+Usage:
     python -m scripts.make_main_report [--models pca iforest] [--output-dir DIR]
 """
 
@@ -32,12 +32,12 @@ from src.utils.reporting import report_problem as official_problem  # noqa: E402
 MAIN_COLUMNS = ["model", "precision", "recall", "f1", "auroc", "event_recall", "delay_median_s", "delay_mean_s",
                 "false_alarms_per_hour", "threshold", "n_unscored"]
 SEED_COLUMNS = ["seed", "run_name", *MAIN_COLUMNS[1:]]
-SEED_STAT_COLUMNS = ("f1", "auroc", "event_recall", "false_alarms_per_hour")  # 主表中写成"均值 ± 标准差"的列
+SEED_STAT_COLUMNS = ("f1", "auroc", "event_recall", "false_alarms_per_hour")  # Columns written as "mean ± std" in the main table
 CONTRIB_FILE = "val_sensor_contrib.csv"
 DIAGNOSIS_MODEL = "pca"
-LOCAL_DIAGNOSTIC_TOLERANCE = 0.005  # 本地与集群的诊断占比允许的最大差（不同 BLAS 的浮点误差远小于此）
+LOCAL_DIAGNOSTIC_TOLERANCE = 0.005  # Maximum allowed difference between local and cluster diagnosis shares (floating-point differences between BLAS libraries are far smaller)
 
-# 配色与 scripts/make_extension_report.py 一致（dataviz 参考调色板，浅色）：单一系列用蓝色，超限的条加斜线纹理
+# Colors match scripts/make_extension_report.py (dataviz reference palette, light): a single series in blue, bars over the limit hatched
 SURFACE, INK, INK2, GRID, BLUE, HATCH_EDGE = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3df", "#2a78d6", "#0b0b0b"
 plt.rcParams.update({
     "font.family": ["Noto Sans CJK JP", "DejaVu Sans"], "axes.unicode_minus": False,
@@ -63,7 +63,7 @@ def main_table(root: Path, models: list[str], allow_unofficial: bool) -> tuple[p
 
 
 def seed_table(root: Path, cfg: dict, allow_unofficial: bool) -> tuple[pd.DataFrame | None, list[str]]:
-    """多随机种子的逐种子结果。任何一个种子的运行不可用时返回 None（不用不完整的种子集合算均值）。"""
+    """Per-seed results of the multi-seed study. Returns None if any seed's run is unavailable (no mean over an incomplete seed set)."""
     study = cfg["ml"]["seed_study"]
     model, base_seed = study["model"], cfg["ml"]["seed"]
     rows, problems = [], []
@@ -77,7 +77,7 @@ def seed_table(root: Path, cfg: dict, allow_unofficial: bool) -> tuple[pd.DataFr
         problem = official_problem(run_dir)
         manifest = json.loads((run_dir / "run_manifest.json").read_text(encoding="utf-8")) if not problem else {}
         if not problem:
-            # 除种子外必须与主模型配置完全相同：主模型运行没有覆盖项，其余只允许 ml.seed 一项
+            # Apart from the seed, the configuration must be identical to the main model: the main-model run has no overrides, the others only ml.seed
             expected = [] if seed == base_seed else [f"{study['seed_key']}={seed}"]
             if manifest.get("seed") != seed or manifest.get("overrides") != expected:
                 problem = f"种子或覆盖项不符（seed={manifest.get('seed')}，overrides={manifest.get('overrides')}，应为 {expected}）"
@@ -92,7 +92,7 @@ def seed_table(root: Path, cfg: dict, allow_unofficial: bool) -> tuple[pd.DataFr
 
 
 def seed_summary(seeds: pd.DataFrame) -> pd.DataFrame:
-    """逐种子的行后面加均值、标准差两行（样本标准差，ddof=1）。"""
+    """Append mean and std rows after the per-seed rows (sample std, ddof=1)."""
     numeric = seeds[MAIN_COLUMNS[1:]].astype(float)
     stats = pd.DataFrame([{"seed": "mean", "run_name": "", **numeric.mean().to_dict()},
                           {"seed": "std", "run_name": "", **numeric.std(ddof=1).to_dict()}])
@@ -143,7 +143,7 @@ def main_table_md(df: pd.DataFrame, seeds: pd.DataFrame | None = None, seed_mode
 
 
 def plot_contrib(df: pd.DataFrame, limit: float, path: Path, top_n: int = 20) -> None:
-    """横向条形图：占比最大的 top_n 个传感器；超过 limit 的条加斜线纹理（不只靠颜色区分）。"""
+    """Horizontal bar chart of the top_n sensors by share; bars over limit are hatched (not distinguished by color alone)."""
     top = df.head(top_n).iloc[::-1]
     fig, ax = plt.subplots(figsize=(8, 0.3 * len(top) + 1.6))
     for y, row in enumerate(top.itertuples()):
@@ -217,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
         plot_contrib(cdf, limit, out / "val_sensor_contrib.png")
         top = cdf.iloc[0]
         local = root / "local_diagnostic" / DIAGNOSIS_MODEL / CONTRIB_FILE
-        if local.exists():  # 本地诊断运行与集群完整运行应当一致
+        if local.exists():  # The local diagnostic run and the full cluster run should agree
             both = cdf.merge(pd.read_csv(local), on="sensor", suffixes=("", "_local"))
             diff = (both["share"] - both["share_local"]).abs().max()
             same = len(both) == len(cdf) and diff < LOCAL_DIAGNOSTIC_TOLERANCE

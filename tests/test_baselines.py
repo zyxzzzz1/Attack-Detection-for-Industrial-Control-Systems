@@ -1,4 +1,4 @@
-"""M2a：PCA / IsolationForest 基线、诊断、阈值，以及 run_model 全部阶段在合成数据上的端到端运行。"""
+"""M2a: PCA / IsolationForest baselines, diagnosis, threshold, and an end-to-end run of all run_model stages on synthetic data."""
 
 import json
 
@@ -17,10 +17,10 @@ from src.utils.paths import load_config
 
 N, W = 3000, 20
 SENSORS = ["P1_A", "P1_B", "P2_A", "P2_B", "P3_A", "P4_A"]
-# (文件, 起始行, 结束行, 受影响的传感器, 置 1 的子系统标签)
+# (file, start row, end row, affected sensors, subsystem labels set to 1)
 EVENTS = [("test1.csv.gz", 1000, 1049, ["P1_A"], ["attack_P1"]),
           ("test2.csv.gz", 500, 529, ["P1_B", "P2_A"], ["attack_P1", "attack_P2"])]
-# 合成数据只有 6 个传感器、2 个隐变量：PCA 保留 80% 方差（约 2 个主成分），诊断上限放宽（单独的测试再收紧）
+# The synthetic data has only 6 sensors and 2 latent variables: PCA keeps 80% of the variance (about 2 components) and the diagnosis limit is relaxed (a separate test tightens it)
 OVERRIDES = ["--set", "ml.data.drop_train_overlap=false", "--set", f"ml.window.length={W}",
              "--set", "ml.models.pca.variance=0.8", "--set", "ml.diagnosis.max_sensor_share=0.99"]
 
@@ -32,7 +32,7 @@ def cfg():
 
 @pytest.fixture(scope="module")
 def hai_dir(tmp_path_factory, cfg):
-    """合成的 HAI 目录：6 个相关的传感器 + 1 个常量列；test1、test2 各注入一个事件。"""
+    """Synthetic HAI directory: 6 correlated sensors + 1 constant column; one event injected into each of test1 and test2."""
     root = tmp_path_factory.mktemp("hai")
     rng = np.random.default_rng(0)
     mix = rng.normal(size=(2, len(SENSORS)))
@@ -65,7 +65,7 @@ def toy_dataset(stride=1, seed=1):
                           rng.normal(size=(31, 4)).astype(np.float32)], window=8, stride=stride)
 
 
-# ---------- 模型 ----------
+# ---------- Models ----------
 
 @pytest.mark.parametrize("stride", [1, 3])
 def test_pca_window_score_is_mean_row_mse_and_last_second_error(cfg, stride):
@@ -75,7 +75,7 @@ def test_pca_window_score_is_mean_row_mse_and_last_second_error(cfg, stride):
     ds = toy_dataset(stride, seed=2)
     scores, per_sensor = model.score(ds)
     assert scores.shape == (len(ds),) and per_sensor.shape == (len(ds), 4)
-    for i in (0, len(ds) // 2, len(ds) - 1):  # 与逐窗口直接计算的结果一致
+    for i in (0, len(ds) // 2, len(ds) - 1):  # Matches the result computed directly per window
         err = model.row_errors(ds[i].numpy())
         assert scores[i] == pytest.approx(err.mean(), rel=1e-4)
         np.testing.assert_allclose(per_sensor[i], err[-1], rtol=1e-4, atol=1e-7)
@@ -96,7 +96,7 @@ def test_iforest_scores_are_deterministic_and_flag_shifted_windows(cfg):
     shifted = WindowDataset([s + 6 for s in normal.segments], 8, 1)
     s_normal, err = a.score(normal)
     assert err is None and s_normal.shape == (len(normal),)
-    np.testing.assert_array_equal(s_normal, b.score(normal)[0])  # 固定种子
+    np.testing.assert_array_equal(s_normal, b.score(normal)[0])  # Fixed seed
     assert a.score(shifted)[0].mean() > s_normal.mean()
 
 
@@ -106,7 +106,7 @@ def test_iforest_train_subsampling(cfg):
     assert build_model("iforest", c).fit(toy_dataset(1), None)["n_fit_windows"] == 10
 
 
-# ---------- 诊断与阈值 ----------
+# ---------- Diagnosis and threshold ----------
 
 def test_sensor_contributions_ignore_unscored_rows():
     err = np.array([[np.nan, np.nan], [1.0, 3.0], [3.0, 9.0]])
@@ -124,7 +124,7 @@ def test_threshold_is_quantile_of_scored_val_thr_seconds():
         compute_threshold(np.array([np.nan]), 0.99, [])
 
 
-# ---------- 端到端 ----------
+# ---------- End to end ----------
 
 def test_pca_end_to_end(env, cfg):
     assert run_model.main(["--model", "pca", *OVERRIDES]) == 0
@@ -136,12 +136,12 @@ def test_pca_end_to_end(env, cfg):
     err = np.load(d / "per_sensor_err_test.npy")
     index = json.loads((d / "test_index.json").read_text(encoding="utf-8"))
     assert scores.shape == (5 * N,) and err.shape == (5 * N, len(SENSORS)) and index["features"] == SENSORS
-    # 每个 test 文件的前 W−1 秒为 NaN，其余都有分数
+    # The first W−1 seconds of each test file are NaN; everything else has a score
     unscored = np.isnan(scores).reshape(5, N)
     assert unscored[:, :W - 1].all() and not unscored[:, W - 1:].any()
     np.testing.assert_array_equal(np.isnan(err).all(axis=1), np.isnan(scores))
 
-    # 阈值只来自 val_thr 分数的 99% 分位
+    # The threshold comes only from the 99% quantile of the val_thr scores
     val = np.load(d / "scores_val_thr.npy")
     thr = json.loads((d / "threshold.json").read_text(encoding="utf-8"))
     assert len(val) == 900 and np.isnan(val).sum() == W - 1
@@ -172,7 +172,7 @@ def test_iforest_end_to_end_and_single_stage_rerun(env):
     assert manifest["stages"]["diagnose"]["skipped"] is True
     first = json.loads((d / "eval_metrics.json").read_text(encoding="utf-8"))
     assert first["event"]["n_events"] == 2 and first["point"]["n_unscored"] == 5 * (W - 1)
-    # 各阶段可以单独重跑：只重跑评估，结果不变（分数和阈值从运行目录读取）
+    # Stages can be rerun individually: rerunning only evaluate gives the same result (scores and threshold read from the run directory)
     assert run_model.main(["--model", "iforest", "--stages", "evaluate", *OVERRIDES]) == 0
     assert json.loads((d / "eval_metrics.json").read_text(encoding="utf-8"))["main_row"] == first["main_row"]
 
@@ -186,7 +186,7 @@ def test_diagnosis_over_limit_stops_before_reading_test(env):
     assert "score" not in manifest["stages"] and (d / "val_sensor_contrib.csv").exists()
     for name in ("scores_test.npy", "scores_val_thr.npy", "test_index.json", "threshold.json", "eval_metrics.json"):
         assert not (d / name).exists()
-    # 决定之后放行：--resume 直接读取已训练的模型，继续后面的阶段
+    # Allowed through after the decision: --resume loads the trained model and continues with the remaining stages
     assert run_model.main([*args, "--set", "ml.diagnosis.allow_over_limit=true", "--resume"]) == 0
     manifest = json.loads((d / "run_manifest.json").read_text(encoding="utf-8"))
     assert manifest["status"] == "completed" and manifest["stages"]["train"]["resumed"] is True
@@ -198,10 +198,10 @@ def test_smoke_run_does_not_stop_on_diagnosis(env):
                            "--set", "ml.diagnosis.max_sensor_share=0.05"]) == 0
 
 
-# ---------- 报告脚本 ----------
+# ---------- Report scripts ----------
 
 def test_main_report_rejects_unofficial_runs(env, tmp_path, capsys):
-    """本地运行（工作区通常是 dirty，或是冒烟）不得进入报告；--allow-unofficial 只能写到别处。"""
+    """Local runs (usually a dirty worktree, or smoke) must never enter the report; --allow-unofficial may only write elsewhere."""
     assert run_model.main(["--model", "pca", *OVERRIDES]) == 0
     manifest_path = env / "pca" / "run_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -225,10 +225,10 @@ def test_main_report_rejects_unofficial_runs(env, tmp_path, capsys):
         make_main_report.main(["--allow-unofficial"])
 
 
-# ---------- 冒烟片段与本地诊断运行 ----------
+# ---------- Smoke clips and local diagnostic runs ----------
 
 def test_smoke_adds_event_clip_so_event_metrics_run(env):
-    """冒烟：每个 test 文件取前一部分，再加 config 中按行号描述的片段（这里覆盖 test1 的事件，前后各留一些）。"""
+    """Smoke: each test file contributes its first part, plus the clips described by row number in the config (here covering the test1 event with some margin on both sides)."""
     clip = "ml.smoke.extra_test_clips=[{file: test1.csv.gz, start_row: 900, rows: 300}]"
     assert run_model.main(["--model", "pca", "--smoke", *OVERRIDES, "--set", "ml.smoke.fraction=0.2", "--set", clip]) == 0
     d = env / "pca"
@@ -239,7 +239,7 @@ def test_smoke_adds_event_clip_so_event_metrics_run(env):
     assert len(scores) == 5 * 600 + 300 and np.isnan(scores[600:600 + W - 1]).all() and not np.isnan(scores[600 + W - 1])
     m = json.loads((d / "eval_metrics.json").read_text(encoding="utf-8"))
     assert m["smoke"] is True and m["point"]["n_unscored"] == 6 * (W - 1)
-    assert m["event"]["n_events"] == 2 and m["event"]["n_detected"] == 2  # test1 的事件在片段里，test2 的在前 20% 里
+    assert m["event"]["n_events"] == 2 and m["event"]["n_detected"] == 2  # The test1 event is in the clip, the test2 event is in the first 20%
     events = pd.read_csv(d / "eval_events.csv")
     assert events["start_time"].tolist() == ["2020-01-04 00:16:40", "2020-01-05 00:08:20"]
 
@@ -266,7 +266,7 @@ def test_local_diagnostic_run_never_reads_test_and_is_rejected_by_report(env, tm
         with pytest.raises(SystemExit):
             run_model.main(["--model", "pca", "--local-diagnostic", *bad, *OVERRIDES])
 
-    # 即使被放到正式运行目录的位置、其他条件都满足，报告脚本也拒绝
+    # Even when placed where an official run directory would be, with every other condition met, the report scripts refuse it
     (env / "pca").mkdir()
     (env / "pca" / "val_sensor_contrib.csv").write_text((d / "val_sensor_contrib.csv").read_text())
     (env / "pca" / "eval_metrics.json").write_text(json.dumps({"main_row": {}}))

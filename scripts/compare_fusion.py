@@ -1,9 +1,9 @@
-"""对比两次融合打分结果（E3：加入第二台靶机前后），输出 R_asset、E_sub 与告警排序的变化。
+"""Compare two fusion scoring results (E3: before and after adding the second target) and report changes in R_asset, E_sub and alert ranking.
 
-输入为 prioritize 输出的两份 enriched_alerts JSON；输出 Markdown（打印并写文件）。
-报警来自 mock 时在输出中标注；该对比基于 mock 报警，按提交策略不入库。
+Inputs are two enriched_alerts JSON files produced by prioritize; output is Markdown (printed and written to a file).
+If the alerts come from mock data this is noted in the output; per the commit policy, this mock-based comparison is not tracked.
 
-用法：
+Usage:
     python -m scripts.compare_fusion --before data/processed/enriched_alerts_before_e3.json \
         [--after data/processed/enriched_alerts.json] [--output reports/extension/e3_compare.md]
 """

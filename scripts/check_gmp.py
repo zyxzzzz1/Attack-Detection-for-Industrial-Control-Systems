@@ -1,15 +1,15 @@
-"""只读的 GMP 连通性检查脚本。
+"""Read-only GMP connectivity check.
 
-通过 UnixSocketConnection 连接 gvmd，打印 GMP 版本、feed 状态、scan config、
-scanner、port list 列表，以及已有的 target / task 数量。
-不创建、不修改、不启动任何对象。
+Connects to gvmd via UnixSocketConnection and prints the GMP version, feed status, and the lists of
+scan configs, scanners and port lists, plus the number of existing targets / tasks.
+Creates, modifies or starts nothing.
 
-用户名和密码只从环境变量 GVM_USER / GVM_PASSWORD 读取；
-socket 路径优先级：--socket > 环境变量 GVM_SOCKET > config/config.yaml 的 gvm.socket_path。
+User name and password are read only from the environment variables GVM_USER / GVM_PASSWORD;
+socket path precedence: --socket > environment variable GVM_SOCKET > gvm.socket_path in config/config.yaml.
 
-用法：
+Usage:
     python -m scripts.check_gmp [--config config/config.yaml] [--socket PATH]
-退出码：0 全部正常；1 连接或认证失败；2 缺少凭据（只完成了版本探测）；3 关键检查项不满足
+Exit codes: 0 all good; 1 connection or authentication failed; 2 missing credentials (only the version probe ran); 3 a key check failed
 """
 
 import argparse
@@ -28,7 +28,7 @@ REQUIRED_CONFIG = "Full and fast"
 
 
 def load_socket_path(config_path: Path) -> str | None:
-    """从配置文件读取 gvm.socket_path，文件不存在时返回 None。"""
+    """Read gvm.socket_path from the config file; return None if the file does not exist."""
     if not config_path.exists():
         return None
     with open(config_path, encoding="utf-8") as f:
@@ -48,7 +48,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def names(response, tag: str) -> list[tuple[str, str]]:
-    """从 get_xxx 响应中取出 (name, id) 列表。"""
+    """Extract a list of (name, id) from a get_xxx response."""
     return [(el.findtext("name", ""), el.get("id", "")) for el in response.findall(tag)]
 
 
@@ -68,7 +68,7 @@ def main() -> int:
     connection = UnixSocketConnection(path=args.socket, timeout=args.timeout)
     try:
         with Gmp(connection=connection, transform=EtreeCheckCommandTransform()) as gmp:
-            # get_version 不需要认证，可用于单纯探测连通性
+            # get_version needs no authentication and can be used purely to probe connectivity
             version = gmp.get_version().findtext("version")
             print(f"[通过] 已连接 {args.socket}，GMP 版本 {version}")
 

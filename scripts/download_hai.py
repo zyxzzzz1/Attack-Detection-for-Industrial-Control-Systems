@@ -1,12 +1,12 @@
-"""下载 HAI 21.03 并核对：文件大小与 git blob sha 均以 GitHub contents API 的返回为准，不一致则重下。
+"""Download and verify HAI 21.03: file sizes and git blob shas are checked against the GitHub contents API; mismatches are re-downloaded.
 
-本地与集群通用（集群登录节点能上网时直接运行；否则从本地 rsync 后用 --verify-only 核对）。
-核对结果写入数据目录下的 download_manifest.json。
+Works both locally and on the cluster (run directly if the cluster login node has internet; otherwise rsync from local and verify with --verify-only).
+Verification results are written to download_manifest.json in the data directory.
 
-用法：
+Usage:
     python -m scripts.download_hai [--verify-only] [--config config/config.yaml]
-    python -m scripts.download_hai --offline      # 不联网：按数据目录里已有的 download_manifest.json 核对
-                                                  # （数据从本地 rsync 到集群、计算节点不能上网时用）
+    python -m scripts.download_hai --offline      # no network: verify against the download_manifest.json already in the data directory
+                                                  # (for when data was rsynced to the cluster and compute nodes have no internet)
 """
 
 import argparse
@@ -24,7 +24,7 @@ CHUNK = 1 << 20
 
 
 def git_blob_sha(path: Path) -> str:
-    """git blob sha1 = sha1(b"blob <size>\\0" + 内容)，与 contents API 的 sha 字段一致。"""
+    """git blob sha1 = sha1(b"blob <size>\\0" + content), identical to the sha field of the contents API."""
     h = hashlib.sha1(f"blob {path.stat().st_size}\0".encode())
     with open(path, "rb") as f:
         while chunk := f.read(CHUNK):
@@ -33,7 +33,7 @@ def git_blob_sha(path: Path) -> str:
 
 
 def check(path: Path, size: int, sha: str) -> str | None:
-    """返回不一致的原因；一致返回 None。"""
+    """Return the reason for a mismatch; None if everything matches."""
     if not path.exists():
         return "文件不存在"
     if path.stat().st_size != size:
@@ -101,7 +101,7 @@ def main() -> int:
             failed.append(name)
         records.append({"name": name, "size": size, "git_blob_sha": sha, "verified": reason is None})
 
-    if args.offline:  # 离线核对不改写 manifest（其中的期望值来自官方仓库）
+    if args.offline:  # Offline verification does not rewrite the manifest (its expected values come from the official repository)
         return 1 if failed else 0
     manifest = {"version": hai["version"], "source": hai["api_url"],
                 "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

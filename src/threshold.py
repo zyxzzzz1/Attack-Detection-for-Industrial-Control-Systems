@@ -1,9 +1,9 @@
-"""阈值阶段：阈值 = val_thr 分数的 ml.threshold.quantile 分位数（约束 3，默认 99%）。只读取 scores_val_thr.npy。
+"""Threshold stage: threshold = the ml.threshold.quantile quantile of the val_thr scores (constraint 3, 99% by default). Reads only scores_val_thr.npy.
 
-同时记录 val_thr 分数的分布（均值、方差等，M2c 用来检查 Deep SVDD 是否坍塌）和其他分位数
-（sensitivity_quantiles，只用于敏感性分析，不据此选阈值）。
+Also records the distribution of the val_thr scores (mean, variance etc., used in M2c to check whether Deep SVDD collapsed) and other quantiles
+(sensitivity_quantiles, only for sensitivity analysis, never for choosing the threshold).
 
-用法：
+Usage:
     python -m src.threshold --model pca [--smoke]
 """
 
@@ -37,7 +37,7 @@ def run(ctx) -> dict:
     cfg = ctx.cfg["ml"]["threshold"]
     result = compute_threshold(np.load(ctx.directory / "scores_val_thr.npy"), cfg["quantile"],
                                cfg["sensitivity_quantiles"])
-    # 坍塌检查：所有窗口的分数几乎相同（方差接近 0）说明模型把所有输入映射到了同一个点
+    # Collapse check: nearly identical scores for all windows (variance close to 0) mean the model maps every input to the same point
     result["collapsed"] = bool(result["score_cv"] < ctx.cfg["ml"]["collapse"]["min_score_cv"])
     if result["collapsed"]:
         ctx.log.warning("val_thr 分数几乎没有变化（方差 %.3g，变异系数 %.3g）：模型可能已坍塌，需要在汇报中指出",

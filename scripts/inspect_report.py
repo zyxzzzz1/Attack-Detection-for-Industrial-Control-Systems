@@ -1,9 +1,9 @@
-"""打印 OpenVAS XML 报告中 result 节点的结构，供编写 parse_report.py 前确认字段。
+"""Print the structure of the result nodes in an OpenVAS XML report, to confirm the fields before writing parse_report.py.
 
-对所有 result 节点做并集：列出每个子路径出现的次数、属性名和一个示例值，
-并统计严重度分布、QoD 分布和 refs 类型。只读，不需要连接 gvmd。
+Takes the union over all result nodes: lists each sub-path with its occurrence count, attribute names and one example value,
+and reports the severity distribution, QoD distribution and refs types. Read-only; no gvmd connection needed.
 
-用法：
+Usage:
     python -m scripts.inspect_report [data/samples/smoke_report.xml]
 """
 
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def walk(el, path: str, stats: dict) -> None:
-    """递归记录路径 → [出现次数, 属性名集合, 示例值]，保持首次出现顺序。"""
+    """Recursively record path -> [occurrences, set of attribute names, example value], preserving first-seen order."""
     entry = stats.setdefault(path, [0, set(), None])
     entry[0] += 1
     entry[1].update(el.attrib.keys())
@@ -47,7 +47,7 @@ def main() -> None:
     for r in results:
         walk(r, "result", stats)
 
-    # 按"各级祖先的首次出现顺序"排序，保证子节点紧跟在父节点下方
+    # Sort by "first-seen order of each ancestor level", so child nodes come right below their parent
     first_seen = {path: i for i, path in enumerate(stats)}
 
     def order(path: str) -> tuple:

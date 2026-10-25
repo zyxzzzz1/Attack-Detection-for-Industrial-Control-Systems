@@ -1,11 +1,11 @@
-"""传统基线：PCA（重构误差）与 IsolationForest（主线补充决策 5）。
+"""Classic baselines: PCA (reconstruction error) and IsolationForest (main-line decision 5).
 
-PCA 的输入选逐秒向量（D 维），不用展平窗口（W×D 维）：
-- 展平窗口在 W=60 时有 3,420 维，相邻窗口高度重复，主成分大部分用来描述时间上的平移，而不是传感器之间的关系；
-- 逐秒 PCA 是不含时间信息的基线，和 LSTM 类模型的差别正好反映"时间建模"带来的收益；
-- 逐传感器误差可以直接得到，用于 val_thr 上的重尾特征诊断和 M5 的归因对比。
-为了和其他模型使用同一套窗口设置，窗口分数 = 窗口内 W 秒逐秒重构 MSE 的均值（与 LSTM-AE 的窗口 MSE 口径相同），
-per_sensor_err = 窗口最后一秒各传感器的平方误差。
+PCA uses per-second vectors (D dimensions) as input rather than flattened windows (W×D dimensions):
+- a flattened window has 3,420 dimensions at W=60 and adjacent windows overlap heavily, so most principal components would describe time shifts rather than relations between sensors;
+- per-second PCA is a baseline without temporal information, so its gap to the LSTM models directly reflects what temporal modeling buys;
+- per-sensor errors come for free, used for the heavy-tail diagnosis on val_thr and the M5 attribution comparison.
+To use the same window setup as the other models, window score = mean of the per-second reconstruction MSE over the W seconds of the window (same definition as the LSTM-AE window MSE),
+per_sensor_err = squared error of each sensor at the window's last second.
 """
 
 from pathlib import Path
@@ -23,14 +23,14 @@ STAT_NAMES = ("mean", "std", "min", "max", "last_minus_first")
 
 
 class _JoblibModel:
-    """用 joblib 保存 / 读取 self.state（字典）。"""
+    """Save / load self.state (a dict) with joblib."""
 
     def __init__(self, cfg: dict) -> None:
         self.cfg = cfg
         self.state: dict = {}
 
     def bind(self, directory: Path, resume: bool, log, manifest=None) -> None:
-        """传统基线一次拟合完成，不需要 checkpoint。"""
+        """Classic baselines are fit in one go and need no checkpoints."""
 
     def save(self, directory: Path) -> None:
         joblib.dump(self.state, Path(directory) / MODEL_FILE)
@@ -47,7 +47,7 @@ class PCAModel(_JoblibModel):
     name = "pca"
 
     def fit(self, train_ds: WindowDataset, val_es_ds: WindowDataset | None = None) -> dict:
-        """在 train 部分的全部逐秒向量上拟合，保留 variance 比例的方差。不需要早停，val_es_ds 不使用。"""
+        """Fit on all per-second vectors of the train part, keeping the variance fraction given by variance. No early stopping; val_es_ds is unused."""
         params = self.cfg["ml"]["models"]["pca"]
         if params["input"] != "per_second":
             raise ValueError("PCA 只实现了逐秒向量输入（ml.models.pca.input = per_second）")
@@ -58,7 +58,7 @@ class PCAModel(_JoblibModel):
                 "explained_variance": float(pca.explained_variance_ratio_.sum())}
 
     def row_errors(self, x: np.ndarray) -> np.ndarray:
-        """逐秒、逐传感器的平方重构误差，形状 (n, D)。"""
+        """Per-second, per-sensor squared reconstruction errors, shape (n, D)."""
         pca = self.state["pca"]
         x = x.astype(np.float64)
         return (x - pca.inverse_transform(pca.transform(x))) ** 2
@@ -79,7 +79,7 @@ class PCAModel(_JoblibModel):
 
 
 def window_stats(windows: np.ndarray) -> np.ndarray:
-    """(B, W, D) → (B, 5·D)：每个传感器在窗口内的 mean、std、min、max、last−first（顺序见 STAT_NAMES）。"""
+    """(B, W, D) -> (B, 5·D): mean, std, min, max, last−first of each sensor within the window (order in STAT_NAMES)."""
     stats = [windows.mean(axis=1), windows.std(axis=1), windows.min(axis=1), windows.max(axis=1),
              windows[:, -1] - windows[:, 0]]
     return np.concatenate(stats, axis=1).astype(np.float32)
@@ -94,7 +94,7 @@ class IForestModel(_JoblibModel):
                                for i in range(0, len(idx), batch)])
 
     def fit(self, train_ds: WindowDataset, val_es_ds: WindowDataset | None = None) -> dict:
-        """在训练窗口的统计特征上拟合。窗口数超过 max_train_windows 时随机下采样（固定种子）。"""
+        """Fit on the statistical features of the training windows. When there are more than max_train_windows windows, subsample randomly (fixed seed)."""
         params = self.cfg["ml"]["models"]["iforest"]
         seed = self.cfg["ml"]["seed"]
         idx = np.arange(len(train_ds))
@@ -108,7 +108,7 @@ class IForestModel(_JoblibModel):
         return {"n_fit_windows": len(x), "n_window_features": x.shape[1], "n_estimators": params["n_estimators"]}
 
     def score(self, ds: WindowDataset) -> tuple[np.ndarray, None]:
-        """分数 = −score_samples（越大越异常）。不输出逐传感器误差。"""
+        """Score = −score_samples (higher is more anomalous). No per-sensor errors are produced."""
         batch = self.cfg["ml"]["models"]["iforest"]["feature_batch"]
         forest, idx = self.state["forest"], np.arange(len(ds))
         out = [-forest.score_samples(window_stats(ds.get_batch(idx[i:i + batch]).numpy()))

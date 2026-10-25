@@ -1,98 +1,98 @@
-# 项目配置：扩展部分（gvm、vuln、intel、fusion、report）与主线（ml）。
+# Project configuration: extension part (gvm, vuln, intel, fusion, report) and main line (ml).
 
 gvm:
-  # gvmd socket 在宿主机上的路径（Docker Compose 部署，socket 卷 bind mount 到 /tmp/gvm/gvmd）
+  # Host path of the gvmd socket (Docker Compose deployment, socket volume bind-mounted to /tmp/gvm/gvmd)
   socket_path: /tmp/gvm/gvmd/gvmd.sock
-  # 实验网段：只允许扫描此网段内的主机（约束 8）
+  # Lab subnet: only hosts inside this subnet may be scanned (constraint 8)
   lab_subnet: 192.168.56.0/24
 
 vuln:
-  # OpenVAS 导出的 XML 报告（parse_report 的输入，每台靶机一份，合并解析）
-  # smoke_report.xml = ews_01（Metasploitable2）；E3 扫描 hmi_main 后追加 data/samples/hmi_main_report.xml
+  # XML reports exported from OpenVAS (input of parse_report, one per target, parsed together)
+  # smoke_report.xml = ews_01 (Metasploitable2); after E3 scans hmi_main, append data/samples/hmi_main_report.xml
   report_xmls:
     - data/samples/smoke_report.xml
-  # 标准化漏洞记录（parse_report 的输出，M7 数据契约）
+  # Normalized vulnerability records (output of parse_report, M7 data contract)
   vulns_json: data/processed/vulns.json
-  # 威胁情报富化后的漏洞记录（intel 的输出，不覆盖 vulns_json）
+  # Vulnerability records after threat-intel enrichment (output of intel; does not overwrite vulns_json)
   vulns_enriched_json: data/processed/vulns_enriched.json
 
 intel:
-  # CISA KEV 官方 JSON feed
+  # Official CISA KEV JSON feed
   kev_url: https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
   kev_cache: data/intel/kev.json
   kev_max_age_hours: 24
-  # FIRST EPSS API：cve 参数上限 2000 字符（含逗号），limit 默认 100
+  # FIRST EPSS API: the cve parameter is limited to 2000 characters (including commas); limit defaults to 100
   epss_url: https://api.first.org/data/v1/epss
   epss_cache: data/intel/epss.csv
   epss_max_param_chars: 2000
   epss_batch_size: 100
-  # EPSS 无记录的 CVE 在缓存中留空，超过此天数后重新查询
+  # CVEs without an EPSS record are left empty in the cache and re-queried after this many days
   epss_missing_max_age_days: 7
-  # 网络请求：单次超时（秒）、重试次数、指数退避基数（秒）
+  # Network requests: per-request timeout (s), number of retries, exponential backoff base (s)
   timeout_s: 30
   retries: 3
   backoff_s: 2
 
 fusion:
-  # 资产映射（人为构造）与融合打分参数
+  # Asset mapping (constructed by hand) and fusion scoring parameters
   asset_map: config/asset_map.yaml
   params: config/fusion.yaml
-  # HAI 21.03 实际列名（mock 报警的传感器名从这里校验）
+  # Actual HAI 21.03 column names (sensor names of the mock alerts are validated against this)
   hai_columns_txt: data/samples/hai_columns.txt
-  # 报警输入（I1 起）：默认使用真实报警，即 LSTM-AE 在集群上完整运行的全部报警段
-  # （python -m scripts.export_alerts 导出，is_mock: false，入库）
+  # Alert input (from I1 on): real alerts by default, i.e. all alarm segments of the full LSTM-AE run on the cluster
+  # (exported by python -m scripts.export_alerts, is_mock: false, tracked)
   alerts_json: data/processed/alerts.json
-  # mock 报警（每条带 is_mock: true，入库）：流水线加 --mock、Streamlit 侧边栏切换时使用
+  # Mock alerts (each with is_mock: true, tracked): used with --mock in the pipeline or when switched in the Streamlit sidebar
   mock_alerts_json: data/mock/alerts.json
-  # 融合打分输出（体积大、可由一条命令重新生成，不入库）；mock 的输出单独放，互不覆盖
+  # Fusion scoring output (large, regenerable with one command, not tracked); mock output is stored separately so neither overwrites the other
   enriched_alerts_json: data/processed/enriched_alerts.json
   mock_enriched_alerts_json: data/processed/enriched_alerts_mock.json
-  # 告警卡片（M10）：Jinja2 模板目录与输出目录（可重新生成，不入库）
+  # Alert cards (M10): Jinja2 template directory and output directory (regenerable, not tracked)
   templates_dir: templates
   cards_dir: reports/cards
   mock_cards_dir: reports/cards_mock
-  # 只为优先级最高的前 N 条报警生成卡片、在索引页和 Streamlit 中列出（真实报警有上千条）；
-  # enriched_alerts.json 仍包含全部报警。0 或 null 表示不限制
+  # Generate cards only for the top N alerts by priority and list only those in the index page and Streamlit (there are over a thousand real alerts);
+  # enriched_alerts.json still contains all alerts. 0 or null means no limit
   max_rendered_alerts: 50
 
 ui:
-  # 界面与报告素材的显示语言：en / zh。只影响显示文字（Streamlit、告警卡片、索引页、案例、图表的标题与坐标轴），
-  # 不影响任何计算、字段名和数字。环境变量 UI_LANG 可临时覆盖。英文译文在 config/i18n_en.yaml。
+  # Display language of the UI and report material: en / zh. Affects display text only (Streamlit, alert cards, index page, cases, chart titles and axes),
+  # never any computation, field name or number. The environment variable UI_LANG overrides it temporarily. English translations are in config/i18n_en.yaml.
   lang: en
 
 report:
-  # E6 报告素材（基于真实数据，入库）
+  # E6 report material (based on real data, tracked)
   extension_dir: reports/extension
 
 ml:
-  # 主线（M0 → R1）参数。数据目录、产物目录可用环境变量 HAI_DATA_DIR、ARTIFACT_DIR 覆盖（本地 / 集群共用一份代码）
+  # Main-line (M0 -> R1) parameters. The data and artifact directories can be overridden by the environment variables HAI_DATA_DIR and ARTIFACT_DIR (one codebase for local and cluster)
   seed: 42
-  # HAI 原始数据目录（其下直接放 train1.csv.gz 等文件，不入库）
+  # HAI raw data directory (train1.csv.gz etc. directly inside, not tracked)
   data_dir: data/raw/hai-21.03
-  # 中间产物根目录（artifacts/{model}/，不入库）
+  # Root of intermediate artifacts (artifacts/{model}/, not tracked)
   artifact_dir: artifacts
-  # 主线报告目录（入库）
+  # Main-line report directory (tracked)
   report_dir: reports/main
   hai:
     version: "21.03"
     train_files: [train1.csv.gz, train2.csv.gz, train3.csv.gz]
-    # test 文件只在最终评估时读取（约束 2）；M0 的数据统计只做描述，不用于调参
+    # test files are read only in the final evaluation (constraint 2); the M0 data statistics are descriptive only and not used for tuning
     test_files: [test1.csv.gz, test2.csv.gz, test3.csv.gz, test4.csv.gz, test5.csv.gz]
     time_col: time
     label_cols: [attack, attack_P1, attack_P2, attack_P3]
-    # 官方仓库：contents API 返回每个文件的大小与 git blob sha，用于下载后核对
+    # Official repository: the contents API returns each file's size and git blob sha, used to verify downloads
     api_url: https://api.github.com/repos/icsdataset/hai/contents/hai-21.03
     raw_url: https://raw.githubusercontent.com/icsdataset/hai/master/hai-21.03
-    # 下载核对结果（期望大小、sha、核对时间），写在数据目录下
+    # Download verification results (expected size, sha, verification time), written into the data directory
     manifest: download_manifest.json
-    # 列名基准（由 scripts.inspect_hai_columns 从 train1 生成）
+    # Column-name reference (generated from train1 by scripts.inspect_hai_columns)
     columns_txt: data/samples/hai_columns.txt
   data:
-    # 按时间拼接后，最后 val_fraction 作为验证集；验证集再按 val_es_fraction 切成 val_es（早停）| val_thr（阈值）
+    # After concatenating in time order, the last val_fraction is the validation set; it is split again by val_es_fraction into val_es (early stopping) | val_thr (threshold)
     val_fraction: 0.2
     val_es_fraction: 0.5
-    # 官方 train 文件中与 test 文件内容相同的行（见 reports/main/data_summary.md 第 3 节），开关打开时从训练集删除。
-    # 这里只按行数描述，训练流程不读取 test 文件；tests/test_preprocess.py 用内容哈希核对删除后确实不含 test 的行。
+    # Rows of the official train files whose content is identical to test files (see section 3 of reports/main/data_summary.md); removed from the training set when the switch is on.
+    # Described here by row counts only, so the training pipeline never reads test files; tests/test_preprocess.py checks via content hashes that no test rows remain after removal.
     drop_train_overlap: true
     train_overlap_drops:
       - {file: train1.csv.gz, head_rows: 1, tail_rows: 43201}
@@ -100,84 +100,84 @@ ml:
     length: 60
     train_stride: 10
     eval_stride: 1
-  # 训练默认值（主线补充决策 4）。CPU 和 GPU 上保持一致，不因换设备而修改；PCA / IsolationForest 不使用
+  # Training defaults (main-line decision 4). Identical on CPU and GPU, never changed per device; not used by PCA / IsolationForest
   train:
     optimizer: adam
     lr: 0.001
     batch_size: 256
     max_epochs: 50
-    patience: 5          # 早停：val_es 损失连续这么多个 epoch 不下降就停
-    eval_batch_size: 1024  # 验证 / 打分时每批的窗口数（只影响速度和显存，不影响结果）
+    patience: 5          # Early stopping: stop when the val_es loss has not decreased for this many consecutive epochs
+    eval_batch_size: 1024  # Windows per batch during validation / scoring (affects only speed and memory, not results)
   threshold:
-    # 阈值 = val_thr 分数的这一分位数（约束 3）。sensitivity_quantiles 只用于敏感性分析，不据此选阈值
+    # Threshold = this quantile of the val_thr scores (constraint 3). sensitivity_quantiles is only for sensitivity analysis, never for choosing the threshold
     quantile: 0.99
     sensitivity_quantiles: [0.99, 0.995, 0.999]
   eval:
-    # 报警段合并间隔（秒）：0 = 只合并连续报警。evaluate 与 export_alerts 共用（主线补充决策 6）
+    # Merge gap of alarm segments (s): 0 = merge only consecutive alarms. Shared by evaluate and export_alerts (main-line decision 6)
     merge_gap_s: 0
   diagnosis:
-    # 重尾特征诊断（只用 val_thr）：各传感器对重构 MSE 的平均贡献占比。单个传感器超过 max_sensor_share 时
-    # 运行在读取 test 之前停下，由人决定是否调整缩放方式；决定之后才把 allow_over_limit 设为 true
-    # 判断只依据 model 指定的基线；其他重构类模型也会输出占比表，但不会因此停下
+    # Heavy-tail feature diagnosis (val_thr only): average share of each sensor in the reconstruction MSE. When a single sensor exceeds max_sensor_share,
+    # the run stops before reading test so a human can decide whether to change the scaling; only after that decision is allow_over_limit set to true
+    # The decision depends only on the baseline named by model; other reconstruction models also write share tables but never stop the run
     model: pca
     max_sensor_share: 0.30
     allow_over_limit: false
   attribution:
-    # 归因（M5）：每个报警段取 Top-k 传感器；参与比较的三个重构类模型
+    # Attribution (M5): Top-k sensors per alarm segment; the three reconstruction models being compared
     top_k: [3, 5]
     models: [lstm_ae, lstm_vae, pca]
-    # 按报警段长度分组计算命中率的分界（秒）：< 第一个值、两个值之间（含两端）、> 第二个值
+    # Boundaries (s) of the alarm-segment duration groups for hit rates: < first value, between the two (inclusive), > second value
     duration_bins_s: [10, 60]
-    # 探索性分析（事后分析，不替换主结果）：段内误差先除以各传感器在 val_thr 上的平均误差再排 Top-k
+    # Exploratory analysis (post hoc, does not replace the main results): divide in-segment errors by each sensor's mean error on val_thr before ranking Top-k
     exploratory_val_norm: true
   alerts:
-    # alerts.json（I1）：只由 LSTM-AE 的产物导出，每条报警带 Top-k 传感器
+    # alerts.json (I1): exported only from the LSTM-AE artifacts, each alert with its Top-k sensors
     model: lstm_ae
     top_k: 5
     output: data/processed/alerts.json
   fusion_eval:
-    # 融合排序评估（I1，src/eval/fusion_ranking.py）：precision@k 的 k
+    # Fusion ranking evaluation (I1, src/eval/fusion_ranking.py): the k values of precision@k
     ks: [10, 20, 50]
   collapse:
-    # 坍塌检查（M2c，主要针对 Deep SVDD）：val_thr 分数的变异系数（std / |mean|）低于此值时警告
+    # Collapse check (M2c, mainly for Deep SVDD): warn when the coefficient of variation (std / |mean|) of the val_thr scores is below this value
     min_score_cv: 0.001
-  # 五个模型（run_model 的 --model 取值）；各自的超参数在对应阶段（M2a–M2c）补充到各自的键下
+  # The five models (values of --model in run_model); per-model hyperparameters are added under their own keys in the corresponding stages (M2a-M2c)
   models:
-    # PCA：输入为逐秒向量（理由见 src/models/classic.py），保留 95% 方差
+    # PCA: input is the per-second vector (reasoning in src/models/classic.py), keeping 95% of the variance
     pca: {input: per_second, variance: 0.95}
-    # IsolationForest：输入为每个窗口逐传感器的 mean、std、min、max、last−first；
-    # max_train_windows 为空表示用全部训练窗口（stride=10 时约 7 万个）；feature_batch 是每批计算特征的窗口数
+    # IsolationForest: input is mean, std, min, max, last-first of each sensor per window;
+    # empty max_train_windows means all training windows (about 70k at stride=10); feature_batch is the number of windows per feature batch
     iforest: {n_estimators: 100, max_samples: 256, max_train_windows: null, feature_batch: 4096}
-    # LSTM-AE（主模型）：W=60、hidden=64 事先固定（约束 9），消融结果不得用来修改这里
+    # LSTM-AE (main model): W=60, hidden=64 fixed in advance (constraint 9); ablation results must not be used to change this
     lstm_ae: {hidden: 64, layers: 1}
-    # LSTM-VAE：损失 = 重构 + beta·KL（两项都按每个窗口求和，见 src/models/lstm_vae.py）
+    # LSTM-VAE: loss = reconstruction + beta*KL (both summed per window, see src/models/lstm_vae.py)
     lstm_vae: {hidden: 64, layers: 1, latent: 32, beta: 1.0}
-    # Deep SVDD：无 bias 的 LSTM 编码器；中心 c 中绝对值小于 eps 的分量设为 ±eps
+    # Deep SVDD: bias-free LSTM encoder; components of the center c with absolute value below eps are set to +/-eps
     deep_svdd: {hidden: 64, layers: 1, rep_dim: 32, eps: 0.1}
   runtime:
-    # DataLoader 进程数；实际取值不超过作业申请的 CPU 数（SLURM_CPUS_PER_TASK）
+    # DataLoader workers; the actual value never exceeds the CPUs requested by the job (SLURM_CPUS_PER_TASK)
     num_workers: 0
   smoke:
-    # 冒烟测试（--smoke）：每个文件只取前 fraction 的行，训练 1 个 epoch。数字只用于检查流程，不写进报告
+    # Smoke test (--smoke): take only the first fraction of rows of each file, train 1 epoch. Numbers are only for checking the pipeline, never for the report
     fraction: 0.01
     max_epochs: 1
-    # 冒烟运行的产物在 产物目录/artifact_subdir/ 下；用冒烟产物开发报告脚本时输出写到 产物目录/report_subdir/
+    # Smoke artifacts go to <artifact dir>/artifact_subdir/; when developing report scripts on smoke artifacts, output goes to <artifact dir>/report_subdir/
     artifact_subdir: smoke
     report_subdir: smoke_reports
-    # test 部分额外截取的片段（按行号，0 起）：test1 的第一个事件（第 2111~2302 行，见 reports/main/attack_events.csv）
-    # 前后各 600 秒，让事件级指标在冒烟中也真正跑一遍
+    # Extra clips taken from test (by row number, 0-based): the first event of test1 (rows 2111~2302, see reports/main/attack_events.csv)
+    # plus 600 s before and after, so the event-level metrics are really exercised in the smoke run too
     extra_test_clips:
       - {file: test1.csv.gz, start_row: 1511, rows: 1392}
   seed_study:
-    # 多随机种子（2026-10-09 定）：只对主模型配置的 LSTM-AE 做，用来估计 F1、AUROC 的随机波动；其余模型维持单种子。
-    # 种子等于 ml.seed 的那一次就是主模型运行本身（目录 lstm_ae/）；其余种子的运行目录为 <run_subdir>/<model>_s<种子>/，
-    # 提交时只带一个覆盖项 ml.seed=<种子>。报警导出、归因和图仍只用主模型运行。
+    # Multiple random seeds (decided 2026-10-09): only for LSTM-AE in the main-model configuration, to estimate the random variation of F1 and AUROC; other models stay single-seed.
+    # The seed equal to ml.seed is the main-model run itself (directory lstm_ae/); runs for the other seeds live in <run_subdir>/<model>_s<seed>/,
+    # submitted with a single override ml.seed=<seed>. Alert export, attribution and figures still use only the main-model run.
     model: lstm_ae
     seeds: [42, 43, 44, 45, 46]
     run_subdir: seeds
     seed_key: ml.seed
   ablation:
-    # LSTM-AE 消融网格（M4）：job array 的任务号按 windows × hiddens 的行优先顺序编号（0 = 第一个 W、第一个 hidden）
+    # LSTM-AE ablation grid (M4): job array task indices follow row-major order over windows x hiddens (0 = first W, first hidden)
     model: lstm_ae
     windows: [30, 60, 120]
     hiddens: [32, 64, 128]

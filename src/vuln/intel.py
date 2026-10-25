@@ -1,23 +1,23 @@
-"""威胁情报富化：CISA KEV + FIRST EPSS（claude.md 第 7 节 M8）。
+"""Threat-intel enrichment: CISA KEV + FIRST EPSS (claude.md section 7, M8).
 
-输入 vulns.json（parse_report 输出，保持不变），输出 vulns_enriched.json。每条漏洞新增：
-- in_kev:   任一 CVE 在 KEV 中即为 true；无 CVE 记 false
-- kev_cves: 命中 KEV 的具体 CVE 列表（告警卡片使用）
-- epss:     所有 CVE 的 EPSS 最大值；无 CVE 或 EPSS 无记录记 0.0
+Input vulns.json (output of parse_report, left unchanged), output vulns_enriched.json. Each vulnerability gains:
+- in_kev:   true if any CVE is in KEV; false if there are no CVEs
+- kev_cves: the specific CVEs that are in KEV (used by the alert cards)
+- epss:     maximum EPSS over all CVEs; 0.0 if there are no CVEs or no EPSS record
 
-数据源（2026-09-30 按官方文档核对）：
-- KEV:  官方 JSON feed，顶层 {catalogVersion, dateReleased, count, vulnerabilities[{cveID, ...}]}
+Data sources (checked against the official documentation on 2026-09-30):
+- KEV:  official JSON feed, top level {catalogVersion, dateReleased, count, vulnerabilities[{cveID, ...}]}
 - EPSS: GET https://api.first.org/data/v1/epss?cve=A,B,...
-        cve 参数最长 2000 字符（含逗号）；limit 默认 100；返回 data[{cve, epss, percentile, date}]，
-        其中 epss/percentile 为字符串；公共接口限速 1000 次/分钟。
+        the cve parameter is at most 2000 characters (including commas); limit defaults to 100; returns data[{cve, epss, percentile, date}],
+        where epss/percentile are strings; the public API is rate-limited to 1000 requests/minute.
 
-缓存：
-- data/intel/kev.json：原样保存官方 JSON，文件修改时间超过 kev_max_age_hours 才重新下载。
-- data/intel/epss.csv：列 cve,epss,percentile,date,fetched_at；已缓存的 CVE 不重复查询。
-  EPSS 无记录的 CVE（如已撤销的编号）也写入缓存，epss 留空，避免每次重复查询；
-  空记录超过 epss_missing_max_age_days 天后重新查询一次（离线模式下仍直接使用）。
+Cache:
+- data/intel/kev.json: the official JSON saved as-is, re-downloaded only when the file is older than kev_max_age_hours.
+- data/intel/epss.csv: columns cve,epss,percentile,date,fetched_at; cached CVEs are not queried again.
+  CVEs without an EPSS record (e.g. rejected IDs) are cached too, with epss empty, to avoid querying them every time;
+  empty records are re-queried once after epss_missing_max_age_days days (offline mode still uses them directly).
 
-用法：
+Usage:
     python -m src.vuln.intel [--input JSON] [--output JSON] [--offline]
 """
 
@@ -38,7 +38,7 @@ EPSS_FIELDS = ["cve", "epss", "percentile", "date", "fetched_at"]
 
 
 class IntelError(Exception):
-    """情报获取失败（网络、格式或离线缓存缺失）。"""
+    """Failed to obtain threat intel (network, format, or missing offline cache)."""
 
 
 def _now() -> datetime:
@@ -47,7 +47,7 @@ def _now() -> datetime:
 
 def http_get_json(session, url: str, params: dict | None, timeout: float, retries: int,
                   backoff_s: float) -> dict:
-    """带超时和重试的 GET；对连接错误、超时、429 和 5xx 重试，其他 4xx 直接失败。"""
+    """GET with timeout and retries; retries on connection errors, timeouts, 429 and 5xx; other 4xx fail immediately."""
     last = None
     for attempt in range(retries + 1):
         try:
@@ -68,7 +68,7 @@ def http_get_json(session, url: str, params: dict | None, timeout: float, retrie
 # ---------------------------------------------------------------- KEV
 
 def load_kev(cfg: dict, session, offline: bool) -> dict:
-    """返回 KEV 官方 JSON；缓存未过期或离线时读缓存。"""
+    """Return the official KEV JSON; read the cache when it has not expired or when offline."""
     cache = ROOT / cfg["kev_cache"]
     fresh = cache.exists() and (time.time() - cache.stat().st_mtime) < cfg["kev_max_age_hours"] * 3600
     if offline or fresh:
@@ -108,7 +108,7 @@ def write_epss_cache(path: Path, rows: dict[str, dict]) -> None:
 
 
 def make_batches(cves: list[str], max_chars: int, max_count: int) -> list[list[str]]:
-    """把 CVE 列表切成批次：逗号拼接后长度 <= max_chars，且条数 <= max_count。"""
+    """Split a CVE list into batches: comma-joined length <= max_chars and count <= max_count."""
     batches, cur, cur_len = [], [], 0
     for cve in cves:
         add = len(cve) + (1 if cur else 0)
@@ -123,7 +123,7 @@ def make_batches(cves: list[str], max_chars: int, max_count: int) -> list[list[s
 
 
 def fetch_epss(cves: list[str], cfg: dict, session) -> dict[str, dict]:
-    """分批查询 EPSS，返回 {cve: row}；API 无记录的 CVE 也返回一行（epss 为空）。"""
+    """Query EPSS in batches, returning {cve: row}; CVEs without an API record also get a row (with empty epss)."""
     fetched_at = _now().isoformat(timespec="seconds")
     out = {}
     batches = make_batches(cves, cfg["epss_max_param_chars"], cfg["epss_batch_size"])
@@ -145,10 +145,10 @@ def fetch_epss(cves: list[str], cfg: dict, session) -> dict[str, dict]:
 
 
 def load_epss(cves: set[str], cfg: dict, session, offline: bool) -> dict[str, dict]:
-    """返回覆盖 cves 的 EPSS 缓存行；只查询缓存中没有的 CVE。"""
+    """Return the EPSS cache rows covering cves; only CVEs missing from the cache are queried."""
     cache_path = ROOT / cfg["epss_cache"]
     rows = read_epss_cache(cache_path)
-    # 空记录（EPSS 无该 CVE）超过 epss_missing_max_age_days 视为过期，重新查询
+    # Empty records (EPSS has no such CVE) older than epss_missing_max_age_days are treated as expired and re-queried
     cutoff = _now().timestamp() - cfg["epss_missing_max_age_days"] * 86400
     stale = set() if offline else {
         c for c, r in rows.items()
@@ -164,7 +164,7 @@ def load_epss(cves: set[str], cfg: dict, session, offline: bool) -> dict[str, di
     return rows
 
 
-# ---------------------------------------------------------------- 富化
+# ---------------------------------------------------------------- enrichment
 
 def enrich_vuln(v: dict, kev: set[str], epss: dict[str, dict]) -> dict:
     cves = [c.strip().upper() for c in v["cves"]]

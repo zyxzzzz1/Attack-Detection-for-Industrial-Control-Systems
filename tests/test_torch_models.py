@@ -1,4 +1,4 @@
-"""M2b / M2c：LSTM-AE、LSTM-VAE、Deep SVDD 的结构、分数定义、断点续训、早停与坍塌检查（合成数据；模型在自动检测到的设备上，CPU 或 GPU）。"""
+"""M2b / M2c: structure, score definitions, resumable training, early stopping and collapse check of LSTM-AE, LSTM-VAE and Deep SVDD (synthetic data; models on the auto-detected device, CPU or GPU)."""
 
 import json
 
@@ -51,7 +51,7 @@ def test_fit_score_save_load(name, tmp_path):
     log = pd.read_csv(tmp_path / "train_log.csv")
     assert log["epoch"].tolist() == [1, 2, 3] and {"train_loss", "val_es_loss", "train_seconds", "val_seconds"} <= set(log.columns)
     assert log["is_best"].sum() >= 1 and log.loc[log["val_es_loss"].idxmin(), "epoch"] == info["best_epoch"]
-    for f in ("last.pt", "best.pt", "epoch_001.pt", "epoch_003.pt"):  # 每个 epoch 都有 checkpoint
+    for f in ("last.pt", "best.pt", "epoch_001.pt", "epoch_003.pt"):  # Every epoch has a checkpoint
         assert (tmp_path / "checkpoints" / f).exists()
 
     _, _, test = datasets()
@@ -61,7 +61,7 @@ def test_fit_score_save_load(name, tmp_path):
         assert err is None
     else:
         assert err.shape == (len(test), D) and (err >= 0).all()
-    np.testing.assert_array_equal(scores, model.score(test)[0])  # 打分是确定性的（VAE 打分不采样）
+    np.testing.assert_array_equal(scores, model.score(test)[0])  # Scoring is deterministic (the VAE does not sample when scoring)
 
     model.save(tmp_path)
     loaded = build_model(name, small_cfg())
@@ -79,17 +79,17 @@ def test_lstm_ae_structure_and_score_definition(tmp_path):
     with torch.no_grad():
         recon = net(x)
         _, (h, _) = net.encoder(x)
-        expected, _ = net.decoder(h[-1].unsqueeze(1).repeat(1, W, 1))  # 最后隐状态重复 W 次送入解码器
+        expected, _ = net.decoder(h[-1].unsqueeze(1).repeat(1, W, 1))  # The last hidden state is repeated W times and fed to the decoder
         np.testing.assert_allclose(recon.cpu().numpy(), net.out(expected).cpu().numpy(), rtol=1e-5, atol=1e-6)
     scores, err = model.score(test)
     sq = ((recon - x) ** 2).cpu().numpy()
-    np.testing.assert_allclose(scores[:5], sq.mean(axis=(1, 2)), rtol=1e-5)  # 分数 = 窗口 MSE
-    np.testing.assert_allclose(err[:5], sq[:, -1, :], rtol=1e-5, atol=1e-7)  # 最后一秒的逐传感器平方误差
+    np.testing.assert_allclose(scores[:5], sq.mean(axis=(1, 2)), rtol=1e-5)  # Score = window MSE
+    np.testing.assert_allclose(err[:5], sq[:, -1, :], rtol=1e-5, atol=1e-7)  # Per-sensor squared error at the last second
 
 
 def test_main_model_config_is_fixed():
     cfg = load_config()["ml"]
-    assert cfg["window"]["length"] == 60 and cfg["models"]["lstm_ae"]["hidden"] == 64  # 约束 9
+    assert cfg["window"]["length"] == 60 and cfg["models"]["lstm_ae"]["hidden"] == 64  # Constraint 9
     assert cfg["train"] == {"optimizer": "adam", "lr": 0.001, "batch_size": 256, "max_epochs": 50, "patience": 5,
                             "eval_batch_size": 1024}
     assert cfg["models"]["lstm_vae"]["beta"] == 1.0
@@ -110,7 +110,7 @@ def test_lstm_vae_loss_is_recon_plus_beta_kl(tmp_path):
     kl = losses[1.0][1]["kl"]
     assert kl > 0 and losses[0.0][0] == pytest.approx(recon, rel=1e-5)
     assert losses[1.0][0] == pytest.approx(recon + kl, rel=1e-5) and losses[3.0][0] == pytest.approx(recon + 3 * kl, rel=1e-5)
-    # 训练时采样、评估时不采样
+    # Samples during training, not during evaluation
     seed_everything(1)
     a = model.batch_loss(x, training=True)[0].item()
     assert a != model.batch_loss(x, training=True)[0].item()
@@ -128,8 +128,8 @@ def test_deep_svdd_has_no_bias_and_fixed_center(tmp_path):
     assert not any(isinstance(m, (torch.nn.BatchNorm1d, torch.nn.LayerNorm)) for m in model.net.modules())
     model.on_fit_start(train)
     c0 = model.net.center.detach().cpu().clone()
-    assert (c0.abs() >= 0.1 - 1e-7).all()  # 接近 0 的分量被设为 ±eps
-    with torch.no_grad():  # 中心 = 初始输出的均值（未被 eps 调整的分量）
+    assert (c0.abs() >= 0.1 - 1e-7).all()  # Components close to 0 are set to ±eps
+    with torch.no_grad():  # Center = mean of the initial output (components not adjusted by eps)
         mean = torch.cat([model.net(x.to(model.device)) for _, x in train.iter_batches(64)]).mean(dim=0).cpu()
     big = mean.abs() >= 0.1
     np.testing.assert_allclose(c0[big].numpy(), mean[big].numpy(), rtol=1e-4, atol=1e-6)
@@ -154,12 +154,12 @@ def test_deep_svdd_center_survives_training(tmp_path):
     model.on_fit_start = lambda ds: (original(ds), captured.setdefault("c", model.net.center.clone()))
     train, val, _ = datasets()
     model.fit(train, val)
-    assert torch.equal(model.net.center, captured["c"])  # 训练中不更新
+    assert torch.equal(model.net.center, captured["c"])  # Not updated during training
 
 
 @pytest.mark.parametrize("name", TORCH_MODELS)
 def test_resume_after_interruption_matches_uninterrupted_run(name, tmp_path):
-    """第 2 个 epoch 结束后被中断，再续训到结束：权重、训练记录与一次跑完的逐位一致。"""
+    """Interrupted after epoch 2, then resumed to the end: weights and training log are bit-identical to an uninterrupted run."""
     cfg = small_cfg("ml.train.max_epochs=4")
     straight, info_a = fit(name, tmp_path / "a", cfg)
 
@@ -176,7 +176,7 @@ def test_resume_after_interruption_matches_uninterrupted_run(name, tmp_path):
         model.fit(train, val)
     assert pd.read_csv(tmp_path / "b" / "train_log.csv")["epoch"].tolist() == [1, 2]
 
-    seed_everything(7)  # 新进程的随机数状态不同：续训必须从 checkpoint 恢复，而不是依赖进程初始状态
+    seed_everything(7)  # A new process has a different RNG state: resuming must restore from the checkpoint rather than rely on the process's initial state
     resumed, info_b = fit(name, tmp_path / "b", cfg, resume=True)
     assert info_b["final_epoch"] == 4 and info_b["best_epoch"] == info_a["best_epoch"]
     for (k, a), (_, b) in zip(straight.net.state_dict().items(), resumed.net.state_dict().items()):
@@ -197,7 +197,7 @@ def test_resume_when_training_already_finished_does_not_train_again(tmp_path):
 
 
 def test_early_stopping_restores_best_weights(tmp_path):
-    """学习率大到发散：验证损失不再下降，patience 个 epoch 后停止，最终权重是验证损失最好的那个 epoch 的。"""
+    """Learning rate large enough to diverge: the validation loss stops decreasing, training stops after patience epochs, and the final weights are those of the epoch with the best validation loss."""
     cfg = small_cfg("ml.train.max_epochs=30", "ml.train.patience=2", "ml.train.lr=0.5")
     model, info = fit("lstm_ae", tmp_path, cfg)
     log = pd.read_csv(tmp_path / "train_log.csv")
@@ -214,7 +214,7 @@ def test_collapse_flag_from_val_thr_score_variation():
     assert compute_threshold(np.random.default_rng(0).exponential(size=1000), 0.99, [])["score_cv"] > 0.5
 
 
-# ---------- 端到端（run_model，合成数据） ----------
+# ---------- End to end (run_model, synthetic data) ----------
 
 @pytest.fixture(scope="module")
 def hai_dir(tmp_path_factory):
@@ -250,7 +250,7 @@ def test_run_model_end_to_end(name, hai_dir, tmp_path, monkeypatch):
     assert manifest["status"] == "completed" and list(manifest["stages"]) == list(run_model.STAGES)
     assert manifest["final_epoch"] == 2 and manifest["early_stop_epoch"] is None
     assert manifest["stages"]["train"]["epoch_seconds_mean"] >= 0
-    assert manifest["stages"]["diagnose"].get("gated", False) is False  # 只有 PCA 的诊断会让运行停下
+    assert manifest["stages"]["diagnose"].get("gated", False) is False  # Only the PCA diagnosis stops the run
     for f in ("model.pt", "train_log.csv", "scores_val_thr.npy", "scores_test.npy", "threshold.json", "eval_metrics.json"):
         assert (d / f).exists(), f
     assert (d / "per_sensor_err_test.npy").exists() == (name != "deep_svdd")
@@ -261,11 +261,11 @@ def test_run_model_end_to_end(name, hai_dir, tmp_path, monkeypatch):
     m = json.loads((d / "eval_metrics.json").read_text(encoding="utf-8"))
     assert m["event"]["n_events"] == 1 and m["main_row"]["model"] == name
 
-    # 串接的后一段作业：前一段已用相同配置完成 → 无事可做，不新增运行段的阶段记录
+    # A chained follow-up job: the previous segment finished with the same config -> nothing to do, no stage records added for a new segment
     before = (d / "run_manifest.json").read_text(encoding="utf-8")
     assert run_model.main(["--model", name, "--resume", *E2E]) == 0
     assert (d / "run_manifest.json").read_text(encoding="utf-8") == before
-    # 配置变了（例如多训练几个 epoch）则不会被跳过；已有 model.pt 时直接读取
+    # A changed config (e.g. more epochs) is not skipped; an existing model.pt is loaded directly
     assert run_model.main(["--model", name, "--resume", *E2E, "--set", "ml.eval.merge_gap_s=5"]) == 0
     after = json.loads((d / "run_manifest.json").read_text(encoding="utf-8"))
     assert len(after["segments"]) == 2 and after["stages"]["train"]["resumed"] is True

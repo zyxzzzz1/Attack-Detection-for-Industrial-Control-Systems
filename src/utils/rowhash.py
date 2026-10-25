@@ -1,21 +1,21 @@
-"""逐行内容哈希：只看传感器取值，不看时间戳和标签。用于检查文件之间是否含有同一份数据（M0），
-以及断言训练窗口中不含 test 的行（M1 测试）。"""
+"""Per-row content hash: looks only at sensor values, not at timestamps or labels. Used to check whether files share the same data (M0)
+and to assert that training windows contain no test rows (M1 tests)."""
 
 import numpy as np
 import pandas as pd
 
 
 def hash_rows(features: pd.DataFrame) -> np.ndarray:
-    """每行一个 uint64 哈希。先统一转成 float64：同一列在不同文件中可能被解析成 int64 或 float64，
-    不统一的话取值相同的行会得到不同的哈希。"""
+    """One uint64 hash per row. Everything is converted to float64 first: the same column may be parsed as int64 or float64 in different files,
+    and without unifying, rows with identical values would get different hashes."""
     return pd.util.hash_pandas_object(features.astype(np.float64), index=False).to_numpy()
 
 
 def matched_runs(hash_a: np.ndarray, hash_b: np.ndarray) -> list[tuple[int, int, int]]:
-    """找出 a 中内容也出现在 b 中的行，并合并为连续段。
+    """Find rows of a whose content also appears in b, and merge them into contiguous runs.
 
-    返回 [(a 中起始下标, b 中起始下标, 长度)]：段内 a、b 的下标同步递增（即一段被整体复制的数据）。
-    不要求两边时间戳对齐，因此能发现错位的部分重叠。b 中内容重复的行取第一次出现的位置。
+    Returns [(start index in a, start index in b, length)]: within a run the indices of a and b increase together (i.e. a block of data copied as a whole).
+    Timestamps on both sides need not line up, so shifted partial overlaps are found too. For rows duplicated in b, the first occurrence is used.
     """
     first_b = pd.Series(np.arange(len(hash_b)), index=hash_b)
     first_b = first_b[~first_b.index.duplicated()]

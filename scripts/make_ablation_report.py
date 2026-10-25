@@ -1,16 +1,16 @@
-"""M4：汇总 LSTM-AE 消融（W × hidden）的结果。只做敏感性分析，不得据此修改主模型（约束 9）。
+"""M4: summarize the LSTM-AE ablation (W x hidden). Sensitivity analysis only; the main model must not be changed based on it (constraint 9).
 
-读取 产物目录/ablation/lstm_ae_w<W>_h<H>/ 下各运行的 eval_metrics.json、threshold.json、run_manifest.json。
+Reads eval_metrics.json, threshold.json and run_manifest.json of each run under <artifact dir>/ablation/lstm_ae_w<W>_h<H>/.
 
-输出（正式：reports/main/；--smoke：产物目录/smoke_reports/）：
-    ablation.csv              每个组合一行：主表的各列 + 训练 epoch 数、每个 epoch 耗时、参数量
-    ablation_quantiles.csv    可选的阈值分位敏感性（99 / 99.5 / 99.9）：每个组合 × 分位一行
-    ablation.md               表格与说明
-    ablation_heatmap.png      W × hidden 网格上的 F1、AUROC、事件检出率
+Output (official: reports/main/; --smoke: <artifact dir>/smoke_reports/):
+    ablation.csv              one row per combination: the main-table columns + epochs trained, time per epoch, parameter count
+    ablation_quantiles.csv    optional threshold-quantile sensitivity (99 / 99.5 / 99.9): one row per combination x quantile
+    ablation.md               table and notes
+    ablation_heatmap.png      F1, AUROC and event recall on the W x hidden grid
 
-缺少的组合（尚未运行或不合格）在表中留空并列出，不影响其余组合。
+Missing combinations (not yet run or not acceptable) are left blank in the table and listed, without affecting the others.
 
-用法：
+Usage:
     python -m scripts.make_ablation_report [--smoke]
 """
 
@@ -29,7 +29,7 @@ from src.utils.run import MANIFEST_NAME, ablation_grid
 
 METRICS = ["precision", "recall", "f1", "auroc", "event_recall", "delay_median_s", "delay_mean_s",
            "false_alarms_per_hour", "threshold", "n_unscored"]
-HEATMAP_METRICS = [("f1", "逐点 F1"), ("auroc", "AUROC"), ("event_recall", "事件检出率")]  # 标题为中文源文，画图时经 t()
+HEATMAP_METRICS = [("f1", "逐点 F1"), ("auroc", "AUROC"), ("event_recall", "事件检出率")]  # Titles are Chinese source text, passed through t() when plotting
 
 
 def collect(src: ReportSource, cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
@@ -59,7 +59,7 @@ def collect(src: ReportSource, cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame, l
 
 
 def plot_heatmaps(df: pd.DataFrame, windows: list[int], hiddens: list[int], path, smoke: bool) -> None:
-    """每个指标一个 W × hidden 色块图（各自的色标，单一色相由浅到深），格子里写数值，主模型配置加框。"""
+    """One W x hidden heatmap per metric (each with its own color scale, a single hue from light to dark), values written in the cells, main-model configuration outlined."""
     apply_style()
     fig, axes = plt.subplots(1, len(HEATMAP_METRICS), figsize=(3.4 * len(HEATMAP_METRICS), 3.4), squeeze=False)
     for ax, (col, title) in zip(axes[0], HEATMAP_METRICS):
@@ -67,7 +67,7 @@ def plot_heatmaps(df: pd.DataFrame, windows: list[int], hiddens: list[int], path
         values = grid.to_numpy(dtype=float)
         finite = values[np.isfinite(values)]
         lo, hi = (finite.min(), finite.max()) if len(finite) else (0, 1)
-        vmin, vmax = (lo, hi) if hi > lo else (lo - 0.5, lo + 0.5)  # 全部相同时给色标一个非零的范围
+        vmin, vmax = (lo, hi) if hi > lo else (lo - 0.5, lo + 0.5)  # If all values are equal, give the color scale a nonzero range
         im = ax.imshow(values, cmap=SEQUENTIAL, vmin=vmin, vmax=vmax, aspect="auto")
         for i in range(len(windows)):
             for j in range(len(hiddens)):

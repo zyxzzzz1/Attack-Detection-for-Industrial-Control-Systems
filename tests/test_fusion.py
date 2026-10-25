@@ -1,4 +1,4 @@
-"""src/fusion 的测试：asset_graph / risk / prioritize，使用小型构造资产图与构造漏洞。"""
+"""Tests of src/fusion: asset_graph / risk / prioritize, with a small hand-built asset graph and hand-built vulnerabilities."""
 
 import json
 from pathlib import Path
@@ -93,7 +93,7 @@ def test_upstream_and_paths(graph):
 
 def test_paths_terminate_on_cycle():
     d = amap_dict()
-    d["edges"].append(["hmi", "hist"])  # 构造环 hist ↔ hmi
+    d["edges"].append(["hmi", "hist"])  # Build a cycle hist <-> hmi
     g = AssetGraph(AssetMap.model_validate(d))
     paths = g.intrusion_paths("P1")
     assert ["ews_a", "plc_p1"] in paths and ["hist", "hmi", "plc_p1"] in paths
@@ -105,7 +105,7 @@ def test_paths_terminate_on_cycle():
 def test_vuln_risk_formula():
     assert vuln_risk(vuln("x", 5.0, epss=0.2), 1.0, 1.5) == pytest.approx(0.6)
     assert vuln_risk(vuln("x", 5.0, epss=0.2, kev=True), 1.0, 1.5) == pytest.approx(0.9)
-    assert vuln_risk(vuln("x", 9.8, epss=0.9, kev=True), 1.0, 1.5) == 1.0  # 截断到 1
+    assert vuln_risk(vuln("x", 9.8, epss=0.9, kev=True), 1.0, 1.5) == 1.0  # Clipped to 1
 
 
 def test_asset_without_vulns_and_unscanned_plc(graph):
@@ -113,14 +113,14 @@ def test_asset_without_vulns_and_unscanned_plc(graph):
     a = r["assets"]
     assert a["ews_a"] == {"R_asset": pytest.approx(0.6), "assessed": True, "status": "scanned",
                           "n_vulns": 1, "n_needs_review": 0}
-    # 已扫描无漏洞：风险确为 0
+    # Scanned with no vulnerabilities: the risk really is 0
     assert a["ews_b"]["R_asset"] == 0.0 and a["ews_b"]["assessed"] and a["ews_b"]["status"] == "no_vulns"
-    # 未扫描（PLC）：未评估，R_asset 为 None 而不是 0
+    # Not scanned (PLC): not assessed, R_asset is None rather than 0
     assert a["plc_p1"]["R_asset"] is None and a["plc_p1"]["assessed"] is False
     assert a["plc_p1"]["status"] == "not_scanned"
     assert r["subsystems"]["P1"]["E_sub"] == pytest.approx(0.6)
     assert r["subsystems"]["P1"]["max_asset"] == "ews_a"
-    # P3 的上游资产都没有漏洞
+    # None of P3's upstream assets have vulnerabilities
     assert r["subsystems"]["P3"]["E_sub"] == 0.0 and r["subsystems"]["P3"]["max_asset"] is None
     assert r["subsystems"]["P4"]["E_sub"] == 0.0
 
@@ -129,16 +129,16 @@ def test_unassessed_counted_as_zero_but_flagged(graph):
     r = compute_risk([], graph, PARAMS)
     p1 = r["subsystems"]["P1"]
     assert p1["unassessed_assets"] == ["hmi", "plc_p1"]
-    assert p1["E_sub_assessed"] is True  # ews_a、hist 已扫描
+    assert p1["E_sub_assessed"] is True  # ews_a and hist are scanned
     assert p1["E_sub"] == 0.0
-    # 上游资产全部未扫描 → E_sub 按 0 计算但标注未评估
+    # All upstream assets unscanned -> E_sub computed as 0 but marked not assessed
     d = amap_dict()
     for aid in ("ews_a", "ews_b", "hist"):
         d["assets"][aid].update(scanned=False, ip=None)
     g = AssetGraph(AssetMap.model_validate(d))
     r = compute_risk([], g, PARAMS)
     assert r["subsystems"]["P1"]["E_sub"] == 0.0 and r["subsystems"]["P1"]["E_sub_assessed"] is False
-    # 无上游资产（P4）：无未评估资产
+    # No upstream assets (P4): no unassessed assets
     assert r["subsystems"]["P4"]["unassessed_assets"] == [] and r["subsystems"]["P4"]["E_sub_assessed"] is False
 
 
@@ -150,20 +150,20 @@ def test_risk_underestimated_flag(graph):
     assert hmi["R_asset"] is None and hmi["assessed"] is False
     assert out["asset_risk"]["hmi"]["R_asset"] is None
     assert out["subsystem_risk"]["P1"]["unassessed_assets"] == ["hmi", "plc_p1"]
-    # 全部资产都已扫描时不提示
+    # No warning when all assets are scanned
     d = amap_dict()
     d["assets"]["hmi"].update(scanned=True, ip="192.168.56.20")
     d["assets"]["plc_p1"].update(scanned=True, ip="192.168.56.101")
     g = AssetGraph(AssetMap.model_validate(d))
     a = prioritize([alert("A", 1.5, [("P1_X", 1.0)])], [], g, PARAMS)["alerts"][0]
     assert a["risk_underestimated"] is False and a["unassessed_assets"] == []
-    # P4 无关联资产：不算未评估
+    # P4 has no associated assets: not counted as not assessed
     a = prioritize([alert("B", 1.5, [("P4_X", 1.0)])], [], graph, PARAMS)["alerts"][0]
     assert a["risk_underestimated"] is False
 
 
 def test_upstream_reachability_in_E_sub(graph):
-    # historian 不在 P1 的 assets 里，但经 hmi 反向可达
+    # historian is not in P1's assets, but is reachable backwards via hmi
     r = compute_risk([vuln("192.168.56.30", 7.0)], graph, PARAMS)
     assert r["subsystems"]["P1"]["E_sub"] == pytest.approx(0.7)
     assert r["subsystems"]["P3"]["E_sub"] == pytest.approx(0.7)
@@ -174,10 +174,10 @@ def test_low_qod_kev_goes_to_needs_review(graph):
           vuln("192.168.56.11", 9.0, epss=0.0, kev=False, qod=30, name="plain-low"),
           vuln("192.168.56.11", 4.0, epss=0.0, kev=False, qod=70, name="ok")]
     r = compute_risk(vs, graph, PARAMS)
-    assert [v["name"] for v in r["vulns"]] == ["ok"]  # qod == min_qod 保留
+    assert [v["name"] for v in r["vulns"]] == ["ok"]  # qod == min_qod is kept
     assert [v["name"] for v in r["needs_review"]] == ["kev-low"]
     assert r["needs_review"][0]["asset"] == "ews_a"
-    assert r["assets"]["ews_a"]["R_asset"] == pytest.approx(0.4)  # 低 QoD 不参与
+    assert r["assets"]["ews_a"]["R_asset"] == pytest.approx(0.4)  # Low QoD is excluded
 
 
 def test_unmapped_ip(graph):
@@ -193,7 +193,7 @@ def test_severity_clipped(ratio, expected):
 
 
 def test_cross_subsystem_weighting(graph):
-    vs = [vuln("192.168.56.11", 5.0)]  # E_P1 = 0.5，E_P3 = 0
+    vs = [vuln("192.168.56.11", 5.0)]  # E_P1 = 0.5, E_P3 = 0
     a = alert("A", 1.5, [("P1_X", 0.3), ("P3_Y", 0.5), ("P3_Z", 0.2)])
     out = prioritize([a], vs, graph, PARAMS)["alerts"][0]
     w = {s["id"]: s["weight"] for s in out["subsystems"]}
@@ -201,7 +201,7 @@ def test_cross_subsystem_weighting(graph):
     expect = 0.5 * (0.3 * (1 + 0.5) * 0.9 + 0.7 * (1 + 0.0) * 0.5)
     assert out["priority"] == pytest.approx(expect)
     assert out["E_sub"] == pytest.approx(0.3 * 0.5)
-    assert [s["id"] for s in out["subsystems"]] == ["P3", "P1"]  # 按权重降序
+    assert [s["id"] for s in out["subsystems"]] == ["P3", "P1"]  # Sorted by weight, descending
 
 
 def test_unknown_prefix_dropped_and_renormalized(graph):
@@ -230,7 +230,7 @@ def test_needs_review_attached_to_alert(graph):
     out = prioritize([alert("A", 1.5, [("P1_X", 1.0)]), alert("B", 1.5, [("P3_Y", 1.0)])], vs, graph, PARAMS)
     by_id = {a["alert_id"]: a for a in out["alerts"]}
     assert len(by_id["A"]["needs_review"]) == 1 and by_id["A"]["vulns"] == []
-    assert by_id["B"]["needs_review"] == []  # ews_a 不在 P3 的上游
+    assert by_id["B"]["needs_review"] == []  # ews_a is not upstream of P3
 
 
 def test_ranking_disclaimer_and_mock_flag(graph):
@@ -250,7 +250,7 @@ def test_mock_alerts_use_real_sensors():
     assert len(alerts) == 5 and all(a["is_mock"] is True for a in alerts)
     with pytest.raises(ValueError, match="不存在的传感器"):
         build_alerts(sensors - {"P1_FT03"})
-    # 保存的 mock 文件与生成结果一致
+    # The saved mock file matches the generated output
     saved = json.loads((ROOT / "data" / "mock" / "alerts.json").read_text(encoding="utf-8"))
     assert saved == alerts
 

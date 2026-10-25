@@ -1,12 +1,12 @@
-"""资产图：读取并校验 asset_map.yaml，提供 传感器 → 子系统 → 资产 → 入侵路径 的查询（claude.md M6）。
+"""Asset graph: read and validate asset_map.yaml and answer sensor -> subsystem -> asset -> intrusion path queries (claude.md M6).
 
-定义：
-- 传感器 → 子系统：按 sensor_prefix 匹配（取最长前缀），未匹配返回 None。
-- 上游资产：子系统 assets 列表中的资产，加上从它们沿 edges 反向可达的全部资产。
-- 入侵路径：终点为子系统内的控制器（purdue_level == 1），起点为没有入边的资产，
-  沿 edges 的全部极大简单路径，方向为 起点 → … → 控制器。
+Definitions:
+- Sensor -> subsystem: matched by sensor_prefix (longest prefix wins); None if nothing matches.
+- Upstream assets: the assets in the subsystem's assets list, plus every asset reachable from them backwards along edges.
+- Intrusion paths: all maximal simple paths along edges that end at a controller of the subsystem (purdue_level == 1)
+  and start at an asset with no incoming edge, directed start -> ... -> controller.
 
-用法：
+Usage:
     python -m src.fusion.asset_graph [--asset-map YAML]
 """
 
@@ -99,13 +99,13 @@ class AssetGraph:
         return self._ip_to_asset.get(ip)
 
     def sensor_to_subsystem(self, sensor: str) -> str | None:
-        """按最长 sensor_prefix 匹配；未知前缀返回 None。"""
+        """Match by the longest sensor_prefix; unknown prefixes return None."""
         hits = [(len(s.sensor_prefix), sid) for sid, s in self.subsystems.items()
                 if sensor.startswith(s.sensor_prefix)]
         return max(hits)[1] if hits else None
 
     def upstream_assets(self, sub_id: str) -> list[str]:
-        """子系统的 assets 加上沿 edges 反向可达的全部资产（排序后返回）。"""
+        """The subsystem's assets plus all assets reachable backwards along edges (returned sorted)."""
         seen: set[str] = set()
         stack = list(self.subsystems[sub_id].assets)
         while stack:
@@ -116,12 +116,12 @@ class AssetGraph:
         return sorted(seen)
 
     def intrusion_paths(self, sub_id: str) -> list[list[str]]:
-        """以子系统内控制器为终点、以无入边资产为起点的全部极大简单路径。"""
+        """All maximal simple paths ending at a controller of the subsystem and starting at an asset with no incoming edge."""
         targets = [a for a in self.subsystems[sub_id].assets if self.assets[a].purdue_level == 1]
         paths: list[list[str]] = []
 
         def walk(node: str, rev_path: list[str]) -> None:
-            # 无入边即为起点；有环时父节点全在路径上也视为终止，保证简单路径
+            # No incoming edge means a start; with a cycle, a node whose parents are all already on the path also ends the walk, keeping paths simple
             nxt = [p for p in self.parents[node] if p not in rev_path]
             if not nxt:
                 paths.append(rev_path[::-1])

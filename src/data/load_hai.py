@@ -1,8 +1,8 @@
-"""读取 HAI CSV：只取传感器列，按文件顺序组织成连续段（Segment），并切分 train | val_es | val_thr。
+"""Read HAI CSVs: keep only sensor columns, organize them per file into contiguous Segments, and split into train | val_es | val_thr.
 
-- 时间列只用于核对逐秒连续并记录每段的起始时间，不作为特征；标签列不在 usecols 中，从不读入。
-- 段（Segment）是一块逐秒连续的数据。文件边界、train/val 切分点、val 内部切分点都是段边界，滑窗只在段内进行。
-- 约束 1：验证集 = 按时间拼接后的最后 val_fraction，不打乱。
+- The time column is only used to verify per-second continuity and to record each segment's start time, never as a feature; label columns are not in usecols and are never read.
+- A Segment is a block of data contiguous per second. File boundaries, the train/val split point and the split point inside val are all segment boundaries; sliding windows stay within a segment.
+- Constraint 1: validation set = the last val_fraction after concatenating in time order, not shuffled.
 """
 
 from dataclasses import dataclass, replace
@@ -18,10 +18,10 @@ SPLITS = ("train", "val_es", "val_thr")
 
 @dataclass
 class Segment:
-    name: str          # 来源文件名
+    name: str          # Source file name
     split: str         # train / val_es / val_thr / test
-    start_row: int     # 第一行在来源文件中的行号（0 起）
-    start_time: str    # 第一行的时间（HAI 原始时间字符串）
+    start_row: int     # Row number of the first row in the source file (0-based)
+    start_time: str    # Time of the first row (HAI raw time string)
     columns: list[str]
     x: np.ndarray      # (n, D) float32
 
@@ -35,7 +35,7 @@ class Segment:
 
 
 def read_segment(path: Path, time_col: str, exclude_cols: list[str], split: str) -> Segment:
-    """读取一个文件的传感器列（float32）。exclude_cols 中的列不读入。文件内部必须逐秒连续。"""
+    """Read the sensor columns of one file (float32). Columns in exclude_cols are not read. The file must be contiguous per second."""
     header = [c.strip() for c in pd.read_csv(path, nrows=0).columns]
     sensors = [c for c in header if c != time_col and c not in exclude_cols]
     df = pd.read_csv(path, skipinitialspace=True, header=0, names=header, usecols=[time_col, *sensors],
@@ -49,12 +49,12 @@ def read_segment(path: Path, time_col: str, exclude_cols: list[str], split: str)
 
 
 def _take_fraction(seg: Segment, fraction: float) -> Segment:
-    """冒烟测试用：只保留段的前 fraction（仍然连续）。"""
+    """For smoke tests: keep only the first fraction of a segment (still contiguous)."""
     return seg if fraction >= 1 else seg.slice(0, max(1, int(len(seg) * fraction)))
 
 
 def load_train_segments(cfg: dict, fraction: float = 1.0) -> list[Segment]:
-    """按配置顺序读取 train 文件，每个文件一段；开关打开时先删除与 test 内容相同的行（文件首尾）。"""
+    """Read the train files in config order, one segment per file; when the switch is on, first drop the rows identical to test content (at the file head/tail)."""
     ml = cfg["ml"]
     hai, data_cfg = ml["hai"], ml["data"]
     drops = {d["file"]: d for d in data_cfg["train_overlap_drops"]} if data_cfg["drop_train_overlap"] else {}
@@ -72,10 +72,10 @@ def load_train_segments(cfg: dict, fraction: float = 1.0) -> list[Segment]:
 
 
 def load_test_segments(cfg: dict, fraction: float = 1.0) -> list[Segment]:
-    """读取 test 文件的传感器列，每个文件一段。只应由打分 / 最终评估流程调用（约束 2）。
+    """Read the sensor columns of the test files, one segment per file. Must only be called by the scoring / final evaluation pipeline (constraint 2).
 
-    冒烟测试（fraction < 1）时每个文件取前 fraction，再加上 ml.smoke.extra_test_clips 中按行号描述的片段
-    （各自成为一段，段内前 W−1 秒同样不打分）。片段的位置写在 config 里，这里不读取标签。
+    In smoke tests (fraction < 1) each file contributes its first fraction, plus the clips described by row numbers in ml.smoke.extra_test_clips
+    (each becomes its own segment; the first W−1 seconds of each are likewise unscored). Clip positions are in the config; no labels are read here.
     """
     hai = cfg["ml"]["hai"]
     clips = cfg["ml"]["smoke"].get("extra_test_clips", []) if fraction < 1 else []
@@ -92,11 +92,11 @@ def load_test_segments(cfg: dict, fraction: float = 1.0) -> list[Segment]:
 
 
 def split_segments(segments: list[Segment], val_fraction: float, val_es_fraction: float) -> dict[str, list[Segment]]:
-    """把按时间排好的段切成 train | val_es | val_thr。切分点落在某段内部时把该段切开，切分点成为新的段边界。"""
+    """Split the time-ordered segments into train | val_es | val_thr. A split point inside a segment cuts that segment, making the split point a new segment boundary."""
     total = sum(len(s) for s in segments)
     n_val = int(round(total * val_fraction))
     n_val_es = int(round(n_val * val_es_fraction))
-    cuts = [0, total - n_val, total - n_val + n_val_es, total]  # 全局行号上的切分点
+    cuts = [0, total - n_val, total - n_val + n_val_es, total]  # Split points in global row numbers
     out = {k: [] for k in SPLITS}
     offset = 0
     for seg in segments:

@@ -1,8 +1,8 @@
-"""界面与报告素材的显示语言（config 的 ui.lang：en / zh，默认 en；环境变量 UI_LANG 可覆盖）。
+"""Display language of the UI and report material (ui.lang in the config: en / zh, default en; the environment variable UI_LANG overrides it).
 
-只影响显示文字，不影响任何计算、字段名和数字。代码和模板里的显示文字一律以中文为源写成 t("中文")；
-zh 原样返回，en 查 config/i18n_en.yaml（键为中文源文，值为英文）。英文缺译时直接报错，由测试保证不会漏。
-带数字的文字用 format 占位符（如 t("共 {n} 条报警").format(n=3)），数字本身不进译文。
+Affects display text only, never any computation, field name or number. Display text in code and templates is always written with Chinese as the source, as t("中文");
+zh returns it unchanged, en looks it up in config/i18n_en.yaml (keys are the Chinese source, values English). A missing English translation raises an error; the tests make sure none is missing.
+Text with numbers uses format placeholders (e.g. t("共 {n} 条报警").format(n=3)); the numbers themselves never go into translations.
 """
 
 import os
@@ -18,7 +18,7 @@ ENV_VAR = "UI_LANG"
 CATALOG = ROOT / "config" / "i18n_en.yaml"
 DISCLAIMER_ZH = "资产映射与漏洞数据来自实验环境，仅用于演示"
 
-_configured: str | None = None   # configure() 设定的进程内默认值（来自调用方传入的 config）
+_configured: str | None = None   # In-process default set by configure() (from the config passed by the caller)
 
 
 @lru_cache(maxsize=1)
@@ -40,7 +40,7 @@ def _check(lang: str) -> str:
 
 
 def configure(cfg: dict | None) -> None:
-    """用调用方已经读入的 config 设定默认语言（环境变量仍然优先）。cfg 为 None 时恢复为读默认的 config.yaml。"""
+    """Set the default language from a config the caller has already loaded (the environment variable still takes precedence). With cfg None, revert to reading the default config.yaml."""
     global _configured
     _configured = _check((cfg.get("ui") or {}).get("lang") or DEFAULT_LANG) if cfg is not None else None
 
@@ -50,7 +50,7 @@ def get_lang() -> str:
 
 
 def t(text: str, lang: str | None = None) -> str:
-    """显示文字：text 是中文源文。"""
+    """Display text: text is the Chinese source."""
     lang = _check(lang) if lang else get_lang()
     if lang == "zh":
         return text
@@ -61,7 +61,7 @@ def t(text: str, lang: str | None = None) -> str:
 
 
 def t_data(text, lang: str | None = None):
-    """来自数据文件的显示文字（子系统名称、资产角色等）：有译文就用，没有就原样返回。"""
+    """Display text from data files (subsystem names, asset roles, etc.): use the translation if there is one, otherwise return it unchanged."""
     lang = _check(lang) if lang else get_lang()
     if lang == "zh" or not isinstance(text, str):
         return text

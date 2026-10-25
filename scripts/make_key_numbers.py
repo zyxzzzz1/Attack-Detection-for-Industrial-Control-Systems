@@ -1,16 +1,16 @@
-"""R1：把写报告要引用的主线关键数字汇总到 reports/main/key_numbers.md（英文）和 key_numbers.zh.md（中文），
-按"检测 / 归因 / 融合 / 数据问题"四组，每个数字标明口径和来源文件。数字全部从来源文件读出，不手工抄写；
-PROGRESS.md 顶部的"关键数字"是中文版的副本。
+"""R1: collect the main-line key numbers cited in the report into reports/main/key_numbers.md (English) and key_numbers.zh.md (Chinese),
+grouped as "detection / attribution / fusion / data issues", each number with its definition and source file. All numbers are read from the source files, never copied by hand;
+the "key numbers" at the top of PROGRESS.md are a copy of the Chinese version.
 
-两种语言由同一次读数生成：每一行的数字只格式化一次，再填进中文或英文的句子模板（L(中文, 英文)），
-所以两个文件的数字不会各写各的；测试逐行核对两种语言的数字相同，并核对英文版与来源表一致。
+Both languages come from the same read: each line's numbers are formatted once and then filled into the Chinese or English sentence template (L(Chinese, English)),
+so the two files cannot diverge in their numbers; the tests check line by line that both languages have the same numbers, and that the English version matches the source tables.
 
-来源全部在 reports/main/ 下（入库）：各张结果表，以及 runs/ 中各次集群完整运行的 eval_metrics.json、run_manifest.json、
-threshold.json、preprocess.json、train_log.csv 的入库副本。本脚本先调用 scripts.snapshot_runs 把这些小文件从产物目录
-脱敏后复制过去（只接受非冒烟、git_dirty=false、已完成的运行；主机名等替换为占位符，原件不动），再从入库副本读数。
-本脚本不读取标签：与标签有关的数字都来自 evaluate / attribution 已经写出的结果。
+All sources are under reports/main/ (tracked): the result tables, and in runs/ the tracked copies of eval_metrics.json, run_manifest.json,
+threshold.json, preprocess.json and train_log.csv of each full cluster run. This script first calls scripts.snapshot_runs to copy these small files from the artifact directory
+with sensitive values redacted (only non-smoke, git_dirty=false, completed runs; host names etc. replaced by placeholders, originals untouched), then reads from the tracked copies.
+This script reads no labels: all label-related numbers come from results already written by evaluate / attribution.
 
-用法：
+Usage:
     python -m scripts.make_key_numbers
 """
 
@@ -28,7 +28,7 @@ from src.utils.reporting import report_problem
 
 MODELS = ["pca", "iforest", "lstm_ae", "lstm_vae", "deep_svdd"]
 OUTPUTS = {"en": "key_numbers.md", "zh": "key_numbers.zh.md"}
-# 来源表里的中文取值（归因脚本写出）在英文版中的写法
+# How the Chinese values in the source tables (written by the attribution script) are written in the English version
 LEVELS_EN = {"报警段": "alarm segments", "事件（第一个报警段）": "events (first segment)", "事件（合并）": "events (merged)"}
 
 
@@ -66,11 +66,11 @@ def build(cfg: dict, lang: str = "en") -> str:
     def L(zh_text: str, en_text: str) -> str:
         return zh_text if zh else en_text
 
-    C, S = L("，", ", "), L("；", "; ")          # 并列项、分句的分隔符
+    C, S = L("，", ", "), L("；", "; ")          # Separators for list items and clauses
     header = L("| 数字 | 口径 | 来源 |", "| Number | Definition and scope | Source |")
     ml = cfg["ml"]
     rep = resolve(ml["report_dir"])
-    root = rep / SNAPSHOT_SUBDIR          # 各次运行的小文件的入库副本
+    root = rep / SNAPSHOT_SUBDIR          # Tracked copies of each run's small files
     art = f"{ml['report_dir']}/{SNAPSHOT_SUBDIR}"
     main = pd.read_csv(rep / "main_results.csv").set_index("model")
     seeds = pd.read_csv(rep / "main_results_seeds.csv").set_index("seed")
@@ -78,7 +78,7 @@ def build(cfg: dict, lang: str = "en") -> str:
     evals = {m: run_json(root, m, "eval_metrics.json") for m in MODELS}
     n_events = evals["lstm_ae"]["event"]["n_events"]
 
-    # ---------- 检测 ----------
+    # ---------- Detection ----------
     det = Table(L("检测", "Detection"), header)
     det.add(L("**不使用 point-adjust**；阈值 = val_thr 分数的 99% 分位数；报警规则为分数 > 阈值",
               "**No point-adjust**; threshold = 99th percentile of the val_thr scores; an alarm is raised when score > threshold"),
@@ -201,7 +201,7 @@ def build(cfg: dict, lang: str = "en") -> str:
               "before the first evaluation on test"),
             L("`reports/main/val_sensor_contrib.csv`、`.png`", "`reports/main/val_sensor_contrib.csv`, `.png`"))
 
-    # ---------- 归因 ----------
+    # ---------- Attribution ----------
     att = Table(L("归因", "Attribution"), header)
     summ = pd.read_csv(rep / "attribution_summary.csv").set_index("model")
     seg = pd.read_csv(rep / "attribution.csv")
@@ -277,7 +277,7 @@ def build(cfg: dict, lang: str = "en") -> str:
               "not obtained; listed under limitations"),
             "`reports/main/attribution_summary.md`")
 
-    # ---------- 融合 ----------
+    # ---------- Fusion ----------
     fus = Table(L("融合（原型演示；不声称提升检测指标，约束 7）",
                   "Fusion (prototype demonstration; no claim of improved detection metrics, constraint 7)"), header)
     alerts = json.loads(resolve(ml["alerts"]["output"]).read_text(encoding="utf-8"))
@@ -332,7 +332,7 @@ def build(cfg: dict, lang: str = "en") -> str:
               "The real scan covers a single target, ews_01; the asset mapping is constructed by hand"),
             L("`reports/extension/key_numbers.md`、`kev_table.md`", "`reports/extension/key_numbers.md`, `kev_table.md`"))
 
-    # ---------- 数据问题 ----------
+    # ---------- Data issues ----------
     dat = Table(L("数据问题", "Data issues"), header)
     pre = run_json(root, "lstm_ae", "preprocess.json")
     drops = ml["data"]["train_overlap_drops"][0]
@@ -414,7 +414,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     args = p.parse_args(argv)
     cfg = load_config(args.config)
-    # 先把产物目录里各次运行的小文件脱敏后复制到入库的位置；产物目录里没有的运行沿用已入库的副本
+    # First copy each run's small files from the artifact directory to the tracked location with redaction; runs missing from the artifact directory keep the tracked copies
     copied, skipped = snapshot(cfg)
     print(f"[复制] {len(copied)} 次运行的小文件（已脱敏）→ {resolve(cfg['ml']['report_dir']) / SNAPSHOT_SUBDIR}"
           + (f"；{len(skipped)} 次运行在产物目录中不可用，沿用已入库的副本" if skipped else ""))

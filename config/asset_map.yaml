@@ -1,12 +1,12 @@
-# 子系统 → 资产 → IP 的映射（人为构造，见 claude.md 第 7 节 M6）
-# 子系统与 HAI 21.03 实际列前缀一致（P1~P4，见 data/samples/hai_columns.txt）
-# 注意：资产映射与漏洞数据来自实验环境，仅用于演示，与 HAI 中的攻击没有因果关系。
-# ip / scanned 必须与实验网络现状一致：只有真实存在、位于 gvm.lab_subnet 内的靶机才能标 scanned: true。
+# Subsystem -> asset -> IP mapping (constructed by hand, see claude.md section 7, M6)
+# Subsystems match the actual column prefixes of HAI 21.03 (P1~P4, see data/samples/hai_columns.txt)
+# Note: the asset mapping and vulnerability data come from a lab environment, are for demonstration only, and have no causal link to the attacks in HAI.
+# ip / scanned must match the actual lab network: only targets that really exist inside gvm.lab_subnet may be marked scanned: true.
 
 subsystems:
   P1:
     name: 锅炉过程
-    criticality: 0.9          # 0~1，业务关键度
+    criticality: 0.9          # 0~1, business criticality
     sensor_prefix: "P1_"
     assets: [plc_p1, hmi_main, ews_01]
   P2:
@@ -23,21 +23,21 @@ subsystems:
     name: HIL 仿真
     criticality: 0.6
     sensor_prefix: "P4_"
-    # HAI 21.03 中 P4 是 HIL 仿真（官方说明：仿真汽轮机发电与抽水蓄能发电），没有独立控制器，也没有 attack_P4 标签。
-    # 因此不挂资产，E_sub 恒为 0；note 原样显示在告警卡片的"推断受影响的子系统"处。
+    # In HAI 21.03, P4 is a HIL simulation (official description: simulated steam-turbine power generation and pumped-storage hydropower); it has no separate controller and no attack_P4 label.
+    # Hence no assets are attached and E_sub is always 0; the note is shown verbatim under "inferred affected subsystems" on the alert cards.
     assets: []
     note: "P4 为 HIL 仿真子系统,无独立控制链;它与 P1、P2、P3 都有物理耦合(P3 的泵和阀由 HIL 中的抽水蓄能发电模型控制),其异常可能由 P1/P2/P3 的攻击经物理耦合传导而来,建议同时排查 P1/P2/P3 相关资产。"
 
 assets:
-  ews_01:    {role: 工程师站,   purdue_level: 2, ip: 192.168.56.11, scanned: true}   # Metasploitable2 靶机
-  ews_02:    {role: 工程师站,   purdue_level: 2, ip: null, scanned: false}           # 暂无靶机
-  hmi_main:  {role: HMI,        purdue_level: 2, ip: null, scanned: false}           # 暂无靶机
-  historian: {role: 历史服务器, purdue_level: 3, ip: null, scanned: false}           # 暂无靶机
-  plc_p1:    {role: PLC,        purdue_level: 1, ip: null, scanned: false}           # OT 实践中不主动扫描 PLC
+  ews_01:    {role: 工程师站,   purdue_level: 2, ip: 192.168.56.11, scanned: true}   # Metasploitable2 target
+  ews_02:    {role: 工程师站,   purdue_level: 2, ip: null, scanned: false}           # No target VM yet
+  hmi_main:  {role: HMI,        purdue_level: 2, ip: null, scanned: false}           # No target VM yet
+  historian: {role: 历史服务器, purdue_level: 3, ip: null, scanned: false}           # No target VM yet
+  plc_p1:    {role: PLC,        purdue_level: 1, ip: null, scanned: false}           # PLCs are not actively scanned in OT practice
   plc_p2:    {role: PLC,        purdue_level: 1, ip: null, scanned: false}
   plc_p3:    {role: PLC,        purdue_level: 1, ip: null, scanned: false}
 
-edges:   # 可达关系：谁能向谁下发指令或写数据
+edges:   # Reachability: who can send commands or write data to whom
   - [historian, hmi_main]
   - [ews_01, plc_p1]
   - [ews_01, plc_p2]

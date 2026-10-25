@@ -1,18 +1,18 @@
-"""最小化冒烟扫描：对 asset_map 中的单台靶机跑一次 OpenVAS 扫描并导出 XML 报告。
+"""Minimal smoke scan: run one OpenVAS scan against a single target from asset_map and export the XML report.
 
-默认只做预检（dry-run）：连接、认证、校验 IP 是否在 gvm.lab_subnet 内、按名称解析
-scan config / scanner / port list / report format 的 ID，并打印将要执行的步骤，不创建任何对象。
-加 --execute 才会新建 target、task 并启动扫描（执行前还会要求输入 yes 确认）。
+By default only a pre-check (dry run): connect, authenticate, verify that the IP is inside gvm.lab_subnet, resolve the IDs of
+scan config / scanner / port list / report format by name, and print the steps that would run, creating nothing.
+Only with --execute are a new target and task created and the scan started (it also asks you to type yes first).
 
-约束：
-- 只新建对象，名称带 "smoke_test_" 前缀和时间戳，绝不查找或复用已有 target / task。
-- 目标 IP 必须在 asset_map 中标记 scanned: true，且位于 gvm.lab_subnet 内，否则直接退出。
-- 凭据只从环境变量 GVM_USER / GVM_PASSWORD 读取。
+Constraints:
+- Only new objects are created, named with the prefix "smoke_test_" and a timestamp; existing targets / tasks are never looked up or reused.
+- The target IP must be marked scanned: true in asset_map and lie inside gvm.lab_subnet, otherwise exit immediately.
+- Credentials are read only from the environment variables GVM_USER / GVM_PASSWORD.
 
-用法：
-    python -m scripts.smoke_scan                      # 预检
-    python -m scripts.smoke_scan --execute            # 创建并启动扫描，轮询到结束后导出报告
-    python -m scripts.smoke_scan --report-id UUID     # 只导出已有报告（只读）
+Usage:
+    python -m scripts.smoke_scan                      # pre-check
+    python -m scripts.smoke_scan --execute            # create and start the scan, poll until done, then export the report
+    python -m scripts.smoke_scan --report-id UUID     # only export an existing report (read-only)
 """
 
 import argparse
@@ -32,8 +32,8 @@ from lxml import etree
 
 ROOT = Path(__file__).resolve().parent.parent
 NAME_PREFIX = "smoke_test_"
-# 冒烟样本要看到全部结果：不应用 override、不按 QoD 过滤、不分页、包含 log 级别
-# 注意 levels 必须含 c（Critical，严重度 >= 9.0，新版 gvmd 引入），否则 >= 9.0 的结果会被静默丢弃
+# The smoke sample must show all results: no overrides, no QoD filter, no paging, log level included
+# Note that levels must include c (Critical, severity >= 9.0, introduced in newer gvmd), otherwise results >= 9.0 are silently dropped
 REPORT_FILTER = "apply_overrides=0 min_qod=0 rows=-1 first=1 levels=chmlg"
 FINISHED = {"Done", "Stopped", "Interrupted"}
 
@@ -61,7 +61,7 @@ def load_yaml(path: Path) -> dict:
 
 
 def resolve_host(args: argparse.Namespace, cfg: dict) -> str:
-    """从 asset_map 取目标 IP，并校验 scanned 标记与实验网段。失败时直接退出。"""
+    """Get the target IP from asset_map and verify the scanned flag and the lab subnet. Exit on failure."""
     asset = load_yaml(args.asset_map).get("assets", {}).get(args.asset)
     if not asset:
         sys.exit(f"[停止] asset_map 中没有资产 {args.asset}")
@@ -76,7 +76,7 @@ def resolve_host(args: argparse.Namespace, cfg: dict) -> str:
 
 
 def find_id(response, tag: str, name: str) -> str:
-    """在 get_xxx 响应中按名称精确匹配，返回 id；找不到时退出。"""
+    """Find an exact name match in a get_xxx response and return its id; exit if not found."""
     for el in response.findall(tag):
         if el.findtext("name") == name:
             return el.get("id")
@@ -84,7 +84,7 @@ def find_id(response, tag: str, name: str) -> str:
 
 
 def wait_for_task(gmp, task_id: str, poll_s: int, timeout_s: int) -> str:
-    """轮询任务状态直到结束或超时，返回最终状态。"""
+    """Poll the task status until it finishes or times out; return the final status."""
     start = time.monotonic()
     while True:
         task = gmp.get_task(task_id).find("task")
@@ -101,7 +101,7 @@ def wait_for_task(gmp, task_id: str, poll_s: int, timeout_s: int) -> str:
 
 
 def export_report(gmp, report_id: str, xml_format_id: str, output: Path) -> bool:
-    """按 XML 格式导出完整报告并保存；返回导出条数是否与报告总数一致。"""
+    """Export the full report in XML format and save it; return whether the number of exported results equals the report total."""
     response = gmp.get_report(
         report_id,
         filter_string=REPORT_FILTER,
@@ -115,7 +115,7 @@ def export_report(gmp, report_id: str, xml_format_id: str, output: Path) -> bool
     full = response.findtext(".//report/report/result_count/full")
     filtered = response.findtext(".//report/report/result_count/filtered")
     print(f"[保存] 报告 {report_id} → {output}（导出 {n} 条，filtered={filtered}，full={full}）")
-    # 过滤条件已放开全部级别和 QoD，三个数应一致；不一致说明有结果被过滤或分页截断
+    # The filter allows all levels and QoD, so the three counts should agree; a mismatch means results were filtered or truncated by paging
     if str(n) == filtered == full:
         print("[通过] 导出条数与报告总数一致")
         return True

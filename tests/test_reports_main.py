@@ -1,4 +1,4 @@
-"""M3 / M4 / M5 / I1 的脚本：归因规则（手工样例）、alerts.json 契约、报告来源规则，以及在合成数据的冒烟产物上跑通全部脚本。"""
+"""Scripts of M3 / M4 / M5 / I1: attribution rules (hand-made examples), the alerts.json contract, report source rules, and running all scripts on smoke artifacts of synthetic data."""
 
 import json
 
@@ -19,7 +19,7 @@ from src.utils.run import ablation_grid
 FEATURES = ["P1_A", "P2_B", "P4_C"]
 
 
-# ---------- 报警段与归因规则（手工样例） ----------
+# ---------- Alarm segments and attribution rules (hand-made examples) ----------
 
 def hand_case():
     n = 50
@@ -27,10 +27,10 @@ def hand_case():
     scores[:2] = np.nan
     err = np.full((n, 3), 0.01)
     err[:2] = np.nan
-    alarms = {(6, 7): [8.0, 1.0, 1.0],      # 与事件 1（P1）重叠，Top-1 = P1_A → 命中
-              (21, 22): [1.0, 5.0, 1.0],    # 只与事件 2（无子系统标签）重叠 → 单列
-              (30, 31): [1.0, 1.0, 3.0],    # 不与任何事件重叠 → 单列
-              (41, 43): [1.0, 2.0, 7.0]}    # 与事件 3（P2）重叠，Top-1 = P4_C → 未命中，且计入 P4
+    alarms = {(6, 7): [8.0, 1.0, 1.0],      # Overlaps event 1 (P1), Top-1 = P1_A -> hit
+              (21, 22): [1.0, 5.0, 1.0],    # Overlaps only event 2 (no subsystem labels) -> listed separately
+              (30, 31): [1.0, 1.0, 3.0],    # Overlaps no event -> listed separately
+              (41, 43): [1.0, 2.0, 7.0]}    # Overlaps event 3 (P2), Top-1 = P4_C -> miss, and counted for P4
     for (a, b), e in alarms.items():
         scores[a:b + 1] = 2.0
         err[a:b + 1] = e
@@ -54,7 +54,7 @@ def test_alarm_segments_and_topk():
     assert top_k(shares, FEATURES, 2) == [{"sensor": "P1_A", "share": pytest.approx(0.8)}, {"sensor": "P2_B", "share": pytest.approx(0.1)}]
     assert subsystem_shares(shares, FEATURES) == {"P1": pytest.approx(0.8), "P2": pytest.approx(0.1), "P4": pytest.approx(0.1)}
     assert np.isnan(sensor_shares(err, 0, 1)).all() and top_k(sensor_shares(err, 0, 1), FEATURES, 3) == []
-    assert alarm_segments(scores, index, 1.0, merge_gap_s=8)[1]["end"] == 31  # 合并间隔来自同一个 to_segments
+    assert alarm_segments(scores, index, 1.0, merge_gap_s=8)[1]["end"] == 31  # The merge gap goes through the same to_segments
 
 
 def test_attribution_rules_hand_example():
@@ -77,20 +77,20 @@ def test_attribution_rules_hand_example():
 
 def test_attribution_segment_overlapping_several_events_uses_longest_overlap():
     scores, err, index, events = hand_case()
-    scores[6:42] = 2.0  # 一段长报警（6~43）跨过三个事件：与事件 1 重叠 4 秒，与事件 2 重叠 5 秒，与事件 3 重叠 4 秒
+    scores[6:42] = 2.0  # One long alarm segment (6~43) spans three events: overlaps event 1 for 4 s, event 2 for 5 s, event 3 for 4 s
     err[6:42] = [1.0, 6.0, 1.0]
     rows, summary, _ = attribution.attribute_run(scores, err, index, 1.0, 0, events, [3])
     assert len(rows) == 1 and rows[0]["event_ids"] == "1+2+3" and rows[0]["n_events_overlap"] == 3
-    # 主口径：重叠最长的是事件 2（没有子系统标签）→ 不计入命中率；并集口径：P1+P2，Top-1 = P2_B → 命中
+    # Primary definition: the longest overlap is event 2 (no subsystem labels) -> excluded from the hit rate; union definition: P1+P2, Top-1 = P2_B -> hit
     assert rows[0]["primary_event_id"] == 2 and rows[0]["category"] == "overlap_no_subsystem_label" and rows[0]["hit"] is None
     assert rows[0]["union_subsystems"] == "P1+P2" and rows[0]["hit_union"] is True
     assert (summary["n_multi_event_segments"], summary["n_evaluable"], summary["n_evaluable_union"], summary["n_hit_union"]) == (1, 0, 1, 1)
 
-    # 去掉事件 2：事件 1 与事件 3 的重叠时间相同（各 4 秒）→ 取较早的事件 1（P1），Top-1 在 P2 → 主口径未命中，并集口径命中
+    # Without event 2: events 1 and 3 overlap equally long (4 s each) -> take the earlier event 1 (P1); Top-1 is in P2 -> primary miss, union hit
     rows, summary, _ = attribution.attribute_run(scores, err, index, 1.0, 0, [events[0], events[2]], [3])
     assert rows[0]["primary_event_id"] == 1 and rows[0]["event_subsystems"] == "P1" and rows[0]["hit"] is False
     assert rows[0]["hit_union"] is True and (summary["n_hit"], summary["n_hit_union"]) == (0, 1)
-    # 事件 3 延长后重叠更长 → 改按事件 3（P2）判断，主口径命中
+    # With event 3 extended the overlap is longer -> judged by event 3 (P2) instead, primary hit
     longer = [events[0], {**events[2], "start": 36}]
     rows, _, _ = attribution.attribute_run(scores, err, index, 1.0, 0, longer, [3])
     assert rows[0]["primary_event_id"] == 3 and rows[0]["hit"] is True
@@ -110,11 +110,11 @@ def test_label_events_use_union_of_subsystem_labels():
                        "attack_P3": [0] * 12})
     index = {"files": [{"file": "f", "offset": 0, "rows": 9, "start_row": 2, "start_time": "2020-01-01"}]}
     events = attribution.label_events(index, {"f": df}, ["attack", "attack_P1", "attack_P2", "attack_P3"])
-    # 片段从第 2 行开始：第一个事件只剩后两秒（只有 P2 的标签），第二个事件没有任何子系统标签
+    # The clip starts at row 2: only the last two seconds of the first event remain (only P2 labels), and the second event has no subsystem labels at all
     assert [(e["start"], e["end"], e["subsystems"]) for e in events] == [(0, 1, ["P2"]), (4, 5, []), (8, 8, [])]
 
 
-# ---------- 报告来源规则 ----------
+# ---------- Report source rules ----------
 
 def write_manifest(d, **fields):
     d.mkdir(parents=True, exist_ok=True)
@@ -141,7 +141,7 @@ def test_report_source_directories(tmp_path, monkeypatch):
     assert (official.root, official.out) == (tmp_path / "art", tmp_path / "report")
 
 
-# ---------- alerts.json 契约 ----------
+# ---------- alerts.json contract ----------
 
 class ContractTopK(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -150,7 +150,7 @@ class ContractTopK(BaseModel):
 
 
 class ContractAlert(BaseModel):
-    """alerts.json 的字段契约：mock 与真实输出都必须通过。mock 多一个 mock_case，真实多一个 model，其余字段完全相同。"""
+    """Field contract of alerts.json: both mock and real output must pass. mock has an extra mock_case, real an extra model; all other fields are identical."""
     model_config = ConfigDict(extra="forbid", strict=True, protected_namespaces=())
     alert_id: str = Field(min_length=1)
     start: str = Field(pattern=r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
@@ -167,11 +167,11 @@ def check_contract(alerts: list[dict], is_mock: bool, sensors: set[str]) -> None
     assert alerts and len({a["alert_id"] for a in alerts}) == len(alerts)
     for a in alerts:
         parsed = ContractAlert.model_validate(a)
-        Alert.model_validate(a)  # 扩展部分实际使用的解析模型
+        Alert.model_validate(a)  # The parsing model actually used by the extension part
         assert parsed.is_mock is is_mock and pd.Timestamp(parsed.start) <= pd.Timestamp(parsed.end)
         assert (parsed.model is None) == is_mock and (parsed.mock_case is None) != is_mock
         shares = [t.share for t in parsed.topk]
-        # 每个 share 四舍五入到 6 位小数，各自最多偏 0.5e-6，所以和的上限按个数放宽
+        # Each share is rounded to 6 decimals, each off by at most 0.5e-6, so the upper bound on the sum is relaxed by the count
         assert shares == sorted(shares, reverse=True) and sum(shares) <= 1 + 0.5e-6 * len(shares) + 1e-9
         assert {t.sensor for t in parsed.topk} <= sensors and len({t.sensor for t in parsed.topk}) == len(shares)
 
@@ -201,11 +201,11 @@ def test_real_alert_fields_equal_mock_fields_except_marker():
     check_contract(alerts, False, set(FEATURES))
 
 
-# ---------- 在合成数据的冒烟产物上跑通全部脚本 ----------
+# ---------- Running all scripts on smoke artifacts of synthetic data ----------
 
 @pytest.fixture(scope="module")
 def workspace(tmp_path_factory):
-    """合成 HAI 数据 → 冒烟运行（pca、lstm_ae 和 2 个消融组合）→ 一份把报告目录指到临时目录的 config。"""
+    """Synthetic HAI data -> smoke runs (pca, lstm_ae and 2 ablation combinations) -> a config with the report directory pointed at a temporary directory."""
     root = tmp_path_factory.mktemp("ws")
     cfg = load_config()
     hai = cfg["ml"]["hai"]
@@ -246,7 +246,7 @@ def test_scripts_on_smoke_artifacts_write_only_to_smoke_reports(workspace):
     root, config = workspace
     out = root / "art" / "smoke_reports"
     base = ["--config", str(config), "--smoke"]
-    assert make_figures.main([*base, "--models", "pca", "lstm_ae", "iforest"]) == 0  # iforest 没跑：跳过
+    assert make_figures.main([*base, "--models", "pca", "lstm_ae", "iforest"]) == 0  # iforest was not run: skipped
     assert attribution.main([*base, "--models", "pca", "lstm_ae"]) == 0
     assert export_alerts.main(base) == 0
     assert make_ablation_report.main(base) == 0
@@ -255,7 +255,7 @@ def test_scripts_on_smoke_artifacts_write_only_to_smoke_reports(workspace):
             "per_subsystem_detection.csv", "attribution.csv", "attribution_summary.csv", "attribution_summary.md",
             "attribution_heatmap_lstm_ae.png", "alerts.json", "ablation.csv", "ablation.md", "ablation_heatmap.png",
             "ablation_quantiles.csv"} <= names
-    # 冒烟模式不写正式位置
+    # Smoke mode never writes to the official locations
     assert not (root / "report").exists() or not list((root / "report").iterdir())
     assert not (root / "official_alerts.json").exists()
 
@@ -272,14 +272,14 @@ def test_scripts_on_smoke_artifacts_write_only_to_smoke_reports(workspace):
     assert set(evaluable["model"]) == {"pca", "lstm_ae"} and set(evaluable["top1_subsystem"]) <= {"P1", "P2", "P4"}
     assert (evaluable["event_subsystems"] == "P1").all()
     assert (evaluable["hit"].astype(str) == (evaluable["top1_subsystem"] == "P1").astype(str)).all()
-    for row in summary.itertuples():  # 汇总与明细一致
+    for row in summary.itertuples():  # Summary and details agree
         own = seg[seg["model"] == row.model]
         assert row.n_alarm_segments == len(own) and row.n_non_overlap == (own["category"] == "non_overlap").sum()
         assert row.n_hit == (own["hit"].astype(str) == "True").sum()
 
     alerts = json.loads((out / "alerts.json").read_text(encoding="utf-8"))
     check_contract(alerts, False, {"P1_A", "P1_B", "P2_A", "P4_A"})
-    # 导出的报警与归因用的是同一批报警段
+    # Exported alerts and attribution use the same alarm segments
     ae = seg[seg["model"] == "lstm_ae"]
     assert [a["start"] for a in alerts] == ae["start_time"].tolist() and [a["end"] for a in alerts] == ae["end_time"].tolist()
     assert [a["topk"][0]["sensor"] for a in alerts] == ae["top1_sensor"].tolist()
@@ -292,7 +292,7 @@ def test_scripts_on_smoke_artifacts_write_only_to_smoke_reports(workspace):
 
 
 def test_official_mode_rejects_smoke_artifacts(workspace, capsys):
-    """同一批冒烟产物放到正式位置：正式模式一律拒绝，不写报告目录，也不写 alerts.json。"""
+    """The same smoke artifacts placed in the official location: official mode always refuses, writing neither the report directory nor alerts.json."""
     root, config = workspace
     art = root / "art"
     for name in ("pca", "lstm_ae"):
@@ -310,7 +310,7 @@ def test_ablation_grid_matches_report_expectations():
     assert len(grid) == 9 and grid[4]["run_name"] == "ablation/lstm_ae_w60_h64"
 
 
-# ---------- 多随机种子（主表 LSTM-AE 一行的均值 ± 标准差） ----------
+# ---------- Multiple random seeds (mean ± std in the LSTM-AE row of the main table) ----------
 
 def _fake_run(root, run_name, model, seed, overrides, f1, auroc, **manifest_extra):
     d = root / run_name
@@ -324,7 +324,7 @@ def _fake_run(root, run_name, model, seed, overrides, f1, auroc, **manifest_extr
 
 
 def test_main_report_seed_study_mean_and_std(tmp_path, monkeypatch, capsys):
-    """全部种子可用时 LSTM-AE 一行写均值 ± 样本标准差；缺一个或配置不符就维持单种子，不用不完整的集合。"""
+    """With all seeds available the LSTM-AE row shows mean ± sample std; with one missing or a config mismatch it stays single-seed, never using an incomplete set."""
     cfg = load_config()
     study = cfg["ml"]["seed_study"]
     assert study["model"] == "lstm_ae" and cfg["ml"]["seed"] in study["seeds"] and len(study["seeds"]) == 5
@@ -337,13 +337,13 @@ def test_main_report_seed_study_mean_and_std(tmp_path, monkeypatch, capsys):
         _fake_run(root, name, "lstm_ae", seed, [] if seed == cfg["ml"]["seed"] else [f"ml.seed={seed}"], f1, 0.9)
 
     args = ["--models", "iforest", "lstm_ae", "--output-dir", str(out)]
-    assert make_main_report.main(args) == 0  # 少一个种子
+    assert make_main_report.main(args) == 0  # One seed missing
     assert "还不完整" in capsys.readouterr().out and not (out / "main_results_seeds.csv").exists()
     assert "±" not in (out / "main_results.md").read_text(encoding="utf-8")
 
     last = study["seeds"][-1]
     _fake_run(root, f"seeds/lstm_ae_s{last}", "lstm_ae", last, [f"ml.seed={last}", "ml.window.length=30"], f1s[-1], 0.9)
-    assert make_main_report.main(args) == 0  # 多了别的覆盖项：不是同一个配置
+    assert make_main_report.main(args) == 0  # An extra override: not the same configuration
     assert "覆盖项不符" in capsys.readouterr().out and not (out / "main_results_seeds.csv").exists()
 
     manifest = root / f"seeds/lstm_ae_s{last}" / "run_manifest.json"
@@ -354,7 +354,7 @@ def test_main_report_seed_study_mean_and_std(tmp_path, monkeypatch, capsys):
     line = next(x for x in md.splitlines() if x.startswith("| lstm_ae |"))
     assert expected in line and "0.9000 ± 0.0000" in line
     assert "±" not in next(x for x in md.splitlines() if x.startswith("| iforest |")) and "单个种子" in md
-    # csv 主表不变：仍是种子 42 的那一次运行，列也不变
+    # The csv main table is unchanged: still the seed-42 run, with the same columns
     table = pd.read_csv(out / "main_results.csv")
     assert list(table.columns) == make_main_report.MAIN_COLUMNS
     assert table.set_index("model").loc["lstm_ae", "f1"] == f1s[0]
@@ -363,12 +363,12 @@ def test_main_report_seed_study_mean_and_std(tmp_path, monkeypatch, capsys):
     assert seeds["f1"].iloc[-1] == pytest.approx(np.std(f1s, ddof=1))
 
 
-# ---------- M5 补充：按事件的主口径、置信区间、按长度分组、探索性归一化 ----------
+# ---------- M5 additions: primary per-event definition, confidence intervals, duration groups, exploratory normalization ----------
 
 def test_wilson_interval_and_precision_at_k():
     from src.eval.metrics import precision_at_k, wilson_interval
     lo, hi = wilson_interval(54, 72)
-    assert (lo, hi) == (pytest.approx(0.6391, abs=1e-4), pytest.approx(0.8356, abs=1e-4))  # 与手算的 Wilson 区间一致
+    assert (lo, hi) == (pytest.approx(0.6391, abs=1e-4), pytest.approx(0.8356, abs=1e-4))  # Matches the hand-computed Wilson interval
     assert wilson_interval(0, 3)[0] == 0.0 and wilson_interval(3, 3)[1] == 1.0 and wilson_interval(3, 3)[0] < 1.0
     assert all(np.isnan(v) for v in wilson_interval(0, 0))
     assert precision_at_k([True, False, True, True], 2) == 0.5 and precision_at_k([True, False], 10) == 0.5
@@ -376,17 +376,17 @@ def test_wilson_interval_and_precision_at_k():
 
 
 def test_event_first_segment_rule_and_duration_groups():
-    """事件 3 有两个报警段：第一个指向 P2（命中），第二个更长、指向 P4；主口径只看第一个，合并口径被第二个主导。"""
+    """Event 3 has two alarm segments: the first points to P2 (hit), the second is longer and points to P4; the primary definition looks only at the first, the merged definition is dominated by the second."""
     scores, err, index, events = hand_case()
-    events[2] = {**events[2], "start": 36}   # 事件 3（P2）提前到第 36 秒开始
-    scores[37:39] = 2.0                      # 事件 3 里先出现的一个短报警段（37~38），之后才是原来的 41~43
+    events[2] = {**events[2], "start": 36}   # Event 3 (P2) now starts earlier, at second 36
+    scores[37:39] = 2.0                      # A short alarm segment (37~38) appears first within event 3, before the original 41~43
     err[37:39] = [1.0, 8.0, 1.0]
     rows, summary, event_rows = attribution.attribute_run(scores, err, index, 1.0, 0, events, [3])
     event_rows = attribution.add_first_segment(event_rows, rows)
     e3 = next(e for e in event_rows if e["event_id"] == 3)
     assert e3["first_top1_subsystem"] == "P2" and e3["first_hit"] is True and e3["first_duration_s"] == 2
-    assert e3["top1_subsystem"] == "P4" and e3["hit"] is False            # 合并口径（补充）
-    assert next(e for e in event_rows if e["event_id"] == 2)["first_hit"] is None  # 无子系统标签的事件不计入分母
+    assert e3["top1_subsystem"] == "P4" and e3["hit"] is False            # Merged definition (supplementary)
+    assert next(e for e in event_rows if e["event_id"] == 2)["first_hit"] is None  # Events without subsystem labels are excluded from the denominator
     full = attribution.full_summary(summary, rows, event_rows)
     assert (full["n_events_first_evaluable"], full["n_events_first_hit"], full["n_events_merged_hit"]) == (2, 2, 1)
     assert full["event_first_hit_rate"] == 1.0 and full["event_hit_rate"] == 0.5
@@ -400,17 +400,17 @@ def test_event_first_segment_rule_and_duration_groups():
 
 
 def test_exploratory_val_normalisation_changes_top1_only_through_baseline():
-    """基线大的传感器（平时误差就高）归一化后让位；不给基线时与原来完全相同。"""
+    """Sensors with a large baseline (usually high error) give way after normalization; without a baseline the result is exactly as before."""
     err = np.array([[4.0, 3.0, 1.0], [4.0, 3.0, 1.0]])
     plain = sensor_shares(err, 0, 1)
     assert top_k(plain, FEATURES, 1)[0]["sensor"] == "P1_A" and plain.sum() == pytest.approx(1)
-    normed = sensor_shares(err, 0, 1, baseline=np.array([4.0, 1.0, 1.0]))   # 相对平时的倍数：1、3、1
+    normed = sensor_shares(err, 0, 1, baseline=np.array([4.0, 1.0, 1.0]))   # Multiples of the usual error: 1, 3, 1
     assert top_k(normed, FEATURES, 1)[0]["sensor"] == "P2_B" and normed.tolist() == pytest.approx([0.2, 0.6, 0.2])
-    zero = sensor_shares(err, 0, 1, baseline=np.array([0.0, 1.0, 1.0]))     # 基线不为正的传感器不参与
+    zero = sensor_shares(err, 0, 1, baseline=np.array([0.0, 1.0, 1.0]))     # Sensors with a non-positive baseline are ignored
     assert zero[0] == 0 and zero.sum() == pytest.approx(1)
 
 
-# ---------- I1：融合排序评估 ----------
+# ---------- I1: fusion ranking evaluation ----------
 
 def test_fusion_ranking_eval_precision_at_k_and_alignment():
     from src.eval import fusion_ranking
@@ -419,9 +419,9 @@ def test_fusion_ranking_eval_precision_at_k_and_alignment():
                            "overlaps_event": [True, False, True, False]})
     truth = fusion_ranking.truth_by_alert(alerts, alarms)
     assert truth == {"A-0": True, "A-1": False, "A-2": True, "A-3": False}
-    with pytest.raises(ValueError):   # 条数不同：不是同一次运行
+    with pytest.raises(ValueError):   # Different counts: not the same run
         fusion_ranking.truth_by_alert(alerts[:3], alarms)
-    with pytest.raises(ValueError):   # 时间对不上
+    with pytest.raises(ValueError):   # Times do not match
         fusion_ranking.truth_by_alert(alerts, alarms.assign(end_time=alarms["end_time"].iloc[::-1].to_numpy()))
 
     ranked = {"raw_score": [("A-0", 9.0), ("A-2", 8.0), ("A-1", 1.0), ("A-3", 0.5)],
@@ -434,15 +434,15 @@ def test_fusion_ranking_eval_precision_at_k_and_alignment():
 
 
 def test_fusion_ranking_module_does_not_read_labels():
-    """融合排序评估不在标签白名单内：真值只能来自 evaluate 写出的 eval_alarms.csv。"""
+    """The fusion ranking evaluation is not on the label whitelist: the ground truth may only come from eval_alarms.csv written by evaluate."""
     text = (ROOT / "src" / "eval" / "fusion_ranking.py").read_text(encoding="utf-8")
     assert "eval_alarms.csv" in text and "labels" not in text.replace("标签", "")
 
 
-# ---------- I1：案例挑选 ----------
+# ---------- I1: case selection ----------
 
 def test_case_rules_and_observations():
-    """案例按固定规则挑选；"放在一起看"的每一条只在数据确实如此时才写。"""
+    """Cases are picked by fixed rules; each "read together" observation is written only if the data actually supports it."""
     from types import SimpleNamespace as NS
 
     from scripts import make_cases
@@ -458,17 +458,17 @@ def test_case_rules_and_observations():
               3: (NS(event_subsystems=float("nan")), alert(28, 2.2, {"P1": 1.0}))}
     text = "\n".join(make_cases.observations(picked))
     assert "70% 的权重放在 P1" in text and "封顶" in text and "同一台已扫描的资产（ews_01）" in text and "P4" in text
-    # 误报排在真实攻击之后、漏洞来自不同资产时，对应的两条不出现
+    # When the false alarm ranks after the real attacks and the vulnerabilities come from different assets, the corresponding two observations do not appear
     picked[3] = (picked[3][0], alert(60, 2.2, {"P1": 1.0}, asset="hmi_main"))
     text = "\n".join(make_cases.observations(picked))
     assert "封顶" not in text and "同一台" not in text
     assert make_cases.observations({}) == []
 
 
-# ---------- R1：关键数字 ----------
+# ---------- R1: key numbers ----------
 
 def test_key_numbers_match_source_tables_and_progress_copy():
-    """key_numbers.zh.md 里的检测数字与主表一致；PROGRESS.md 顶部的关键数字是它的原样副本（两处不许各写各的）。"""
+    """The detection numbers in key_numbers.zh.md match the main table; the key numbers at the top of PROGRESS.md are a verbatim copy (the two may not diverge)."""
     report = ROOT / load_config()["ml"]["report_dir"]
     text = (report / "key_numbers.zh.md").read_text(encoding="utf-8")
     main = pd.read_csv(report / "main_results.csv")
@@ -480,7 +480,7 @@ def test_key_numbers_match_source_tables_and_progress_copy():
     assert f"{seeds.loc['mean', 'false_alarms_per_hour']:.2f} ± {seeds.loc['std', 'false_alarms_per_hour']:.2f}" in text
     md = (report / "main_results.md").read_text(encoding="utf-8")
     line = next(x for x in md.splitlines() if x.startswith("| lstm_ae |"))
-    assert line.count("±") == 4                      # 主表该行：F1、AUROC、事件检出率、误报率
+    assert line.count("±") == 4                      # That row of the main table: F1, AUROC, event recall, false-alarm rate
     for group in ("### 检测", "### 归因", "### 融合", "### 数据问题"):
         assert group in text
     assert "不使用 point-adjust" in text and "事后分析，不替换主结果" in text
@@ -488,13 +488,13 @@ def test_key_numbers_match_source_tables_and_progress_copy():
 
 
 def test_key_numbers_english_matches_source_files_and_chinese_version():
-    """英文版 key_numbers.md：数字与来源文件一致；与中文版逐行对应，每一行里的数字完全相同；不夹带中文。"""
+    """English key_numbers.md: numbers match the source files; line-by-line correspondence with the Chinese version, with exactly the same numbers in each line; no Chinese mixed in."""
     import re
     report = ROOT / load_config()["ml"]["report_dir"]
     en = (report / "key_numbers.md").read_text(encoding="utf-8")
     zh = (report / "key_numbers.zh.md").read_text(encoding="utf-8")
 
-    # 与来源文件一致：主表、种子表、归因汇总、融合排序、各次运行的评估结果
+    # Matches the source files: main table, seed table, attribution summary, fusion ranking, evaluation results of each run
     main = pd.read_csv(report / "main_results.csv")
     for row in main.itertuples():
         ev = json.loads((report / "runs" / row.model / "eval_metrics.json").read_text(encoding="utf-8"))["event"]
@@ -516,7 +516,7 @@ def test_key_numbers_english_matches_source_files_and_chinese_version():
     abl = pd.read_csv(report / "ablation.csv")
     assert f"F1 {abl.f1.min():.3f}–{abl.f1.max():.3f}, AUROC {abl.auroc.min():.3f}–{abl.auroc.max():.3f}" in en
 
-    # 与中文版逐行对应：同一行的数字（含文件名、配置名里的数字）作为多重集合完全相同
+    # Line-by-line correspondence with the Chinese version: the numbers in a line (including those in file and config names) are identical as multisets
     number = re.compile(r"\d+(?:[.,]\d+)*")
     en_lines, zh_lines = en.splitlines(), zh.splitlines()
     assert len(en_lines) == len(zh_lines)
@@ -531,7 +531,7 @@ def test_key_numbers_english_matches_source_files_and_chinese_version():
     assert not re.search(r"[\u4e00-\u9fff，；：（）、]", en)
 
 
-# ---------- R1：各次运行的入库副本（reports/main/runs/） ----------
+# ---------- R1: tracked copies of each run (reports/main/runs/) ----------
 
 def _snapshot_dir():
     from scripts import snapshot_runs
@@ -540,7 +540,7 @@ def _snapshot_dir():
 
 
 def test_run_snapshots_are_official_and_key_numbers_reproducible():
-    """入库副本里每次运行都是集群完整运行；关键数字只用入库的文件就能重新生成，且与入库的版本相同。"""
+    """Every run in the tracked copies is a full cluster run; the key numbers can be regenerated from the tracked files alone and match the tracked version."""
     from scripts import make_key_numbers
     cfg, snapshot_runs, runs = _snapshot_dir()
     names = snapshot_runs.run_names(cfg)
@@ -550,13 +550,13 @@ def test_run_snapshots_are_official_and_key_numbers_reproducible():
         assert (runs / name / "eval_metrics.json").exists() and (runs / name / "threshold.json").exists()
     for lang, name in make_key_numbers.OUTPUTS.items():
         assert make_key_numbers.build(cfg, lang) == (ROOT / cfg["ml"]["report_dir"] / name).read_text(encoding="utf-8")
-    assert not [p for p in runs.rglob("*") if p.is_file() and p.name not in snapshot_runs.FILES]  # 不带大文件和日志
+    assert not [p for p in runs.rglob("*") if p.is_file() and p.name not in snapshot_runs.FILES]  # No large files or logs
 
 
 def test_run_snapshots_contain_no_personal_or_cluster_identifiers():
-    """仓库可能公开：入库副本里不出现用户名、集群路径、主机名；hostname / node 一律是占位符。"""
+    """The repository may become public: the tracked copies contain no user names, cluster paths or host names; hostname / node are always placeholders."""
     cfg, snapshot_runs, runs = _snapshot_dir()
-    rules = snapshot_runs.scrub_rules()   # 真实的用户名和路径在不入库的 cluster.local.yaml 里；没有它时只剩登录主机名
+    rules = snapshot_runs.scrub_rules()   # The real user name and paths are in the untracked cluster.local.yaml; without it only the login host name remains
     assert ("<cluster-host>" in {r for _, r in rules})
 
     def node_values(obj):
@@ -582,7 +582,7 @@ def test_run_snapshots_contain_no_personal_or_cluster_identifiers():
             assert values <= {snapshot_runs.NODE_PLACEHOLDER, None, ""}, (path, values)
             assert snapshot_runs.NODE_PLACEHOLDER in values
 
-    # 脱敏函数本身：键名命中的替换，字符串里的用户名和路径替换，其余不动
+    # The redaction function itself: matching keys replaced, user names and paths in strings replaced, everything else untouched
     sample = {"hostname": "nodeA", "slurm": {"node": "nodeA", "job_id": "1"}, "note": "/data/users/someone/x", "seed": 42}
     assert snapshot_runs.scrub_nodes(sample) == {"hostname": "<cluster-node>", "slurm": {"node": "<cluster-node>", "job_id": "1"},
                                                  "note": "/data/users/someone/x", "seed": 42}
@@ -592,8 +592,8 @@ def test_run_snapshots_contain_no_personal_or_cluster_identifiers():
 
 
 def test_run_snapshots_match_originals_in_artifact_dir():
-    """入库副本 = 对产物目录中的原件做脱敏的结果；没有命中脱敏规则的文件与原件逐字节相同。
-    产物目录不入库：原件不在时（集群上、全新的克隆）跳过。"""
+    """Tracked copy = original in the artifact directory with redaction applied; files without matches are byte-identical to the originals.
+    The artifact directory is not tracked: skipped when the originals are absent (on the cluster, in a fresh clone)."""
     cfg, snapshot_runs, runs = _snapshot_dir()
     root = ROOT / cfg["ml"]["artifact_dir"]
     rules = snapshot_runs.scrub_rules()
@@ -606,10 +606,10 @@ def test_run_snapshots_match_originals_in_artifact_dir():
                 continue
             assert copy.read_bytes() == snapshot_runs.redacted(original, rules).encode("utf-8"), f"{name}/{f}"
             if f != "run_manifest.json":
-                assert copy.read_bytes() == original.read_bytes(), f"{name}/{f}"   # 只有 manifest 需要脱敏
+                assert copy.read_bytes() == original.read_bytes(), f"{name}/{f}"   # Only the manifest needs redaction
                 identical += 1
             else:
-                # manifest：除 hostname / node 外逐项相同
+                # manifest: identical item by item apart from hostname / node
                 a, b = json.loads(original.read_text(encoding="utf-8")), json.loads(copy.read_text(encoding="utf-8"))
                 assert snapshot_runs.scrub_nodes(a) == b and a["git_commit"] == b["git_commit"] and a["stages"] == b["stages"]
             checked += 1
@@ -618,11 +618,11 @@ def test_run_snapshots_match_originals_in_artifact_dir():
     assert checked == 88 and identical == 70
 
 
-# ---------- 英文化：图表与表格在两种显示语言下数值一致 ----------
+# ---------- Localization: identical values in figures and tables in both display languages ----------
 
 def test_figures_and_tables_identical_between_languages(workspace, monkeypatch):
-    """同一批冒烟产物，中文、英文各生成一次全部图表：csv / json 逐字节相同（只有图上的文字不同）；
-    图上的文字里出现的数字相同；英文图上没有中文，中文图上有中文。"""
+    """Generate all figures and tables from the same smoke artifacts once in Chinese and once in English: csv / json are byte-identical (only the text on the figures differs);
+    the numbers in the figure text are identical; English figures contain no Chinese, Chinese figures do."""
     import hashlib
     import re
     from collections import Counter
@@ -649,7 +649,7 @@ def test_figures_and_tables_identical_between_languages(workspace, monkeypatch):
         assert make_figures.main([*base, "--models", "pca", "lstm_ae"]) == 0
         assert attribution.main([*base, "--models", "pca", "lstm_ae"]) == 0
         assert make_ablation_report.main(base) == 0
-        # .md 是中文文档，不在英文化范围内，但内容同样不应随显示语言变化
+        # The .md files are Chinese documents outside the localization scope, but their content must not vary with the display language either
         digests[lang] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                          for p in sorted(out.iterdir()) if p.suffix in (".csv", ".json", ".md")}
         assert all(p.stat().st_size > 0 for p in out.glob("*.png"))
@@ -657,7 +657,7 @@ def test_figures_and_tables_identical_between_languages(workspace, monkeypatch):
     num = re.compile(r"\d+(?:\.\d+)?")
     cjk = re.compile(r"[\u4e00-\u9fff]")
     zh, en = "\n".join(captured["zh"]), "\n".join(captured["en"])
-    assert len(captured["zh"]) == len(captured["en"]) > 50          # 同样多的文字对象
-    assert Counter(num.findall(zh)) == Counter(num.findall(en))      # 刻度、格子里的数值、标题里的数字都相同
+    assert len(captured["zh"]) == len(captured["en"]) > 50          # The same number of text objects
+    assert Counter(num.findall(zh)) == Counter(num.findall(en))      # Ticks, cell values and numbers in titles are all identical
     assert cjk.search(zh) and not cjk.search(en), cjk.findall(en)[:10]
     assert "Anomaly score" in en and "Training curves" in en and "smoke-test data" in en and "Point-wise F1" in en

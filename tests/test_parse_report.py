@@ -1,4 +1,4 @@
-"""src/vuln/parse_report.py 的测试，输入为 data/samples/smoke_report.xml。"""
+"""Tests of src/vuln/parse_report.py, with data/samples/smoke_report.xml as input."""
 
 import copy
 from collections import Counter
@@ -26,7 +26,7 @@ def sample_tree() -> etree._ElementTree:
 
 
 def write_variant(tree, tmp_path: Path, edit) -> Path:
-    """复制样本树，用 edit(内层 report) 修改后写到临时文件。"""
+    """Copy the sample tree, modify it with edit(inner report) and write it to a temporary file."""
     t = copy.deepcopy(tree)
     edit(t.getroot().find(".//report/report"))
     out = tmp_path / "variant.xml"
@@ -61,8 +61,8 @@ def test_record_fields(parsed):
 
 
 def test_no_log_results(parsed):
-    # "SSL/TLS: Report Weak Cipher Suites" 在 25/tcp 上是 Log（severity=0，但 nvt/cvss_base=5.9），
-    # 在 5432/tcp 上是 Medium（5.9）：只应保留后者
+    # "SSL/TLS: Report Weak Cipher Suites" is Log on 25/tcp (severity=0, but nvt/cvss_base=5.9)
+    # and Medium (5.9) on 5432/tcp: only the latter should be kept
     assert all(v["threat"] != "Log" for v in parsed["vulns"])
     weak = {v["port"]: v["cvss"] for v in parsed["vulns"] if v["name"] == "SSL/TLS: Report Weak Cipher Suites"}
     assert weak == {"5432/tcp": 5.9}
@@ -75,7 +75,7 @@ def test_all_critical_kept(parsed):
 
 
 def test_qod_not_filtered(parsed):
-    # 样本中有 QoD=30 的结果，parse_report 不应过滤
+    # The sample contains a result with QoD=30, which parse_report must not filter out
     assert min(v["qod"] for v in parsed["vulns"]) < 70
 
 
@@ -87,7 +87,7 @@ def test_keys_unique_and_sorted(parsed):
 
 
 def test_dedup_keeps_highest_severity_then_qod(sample_tree, tmp_path):
-    """把一条非 Log 结果复制两份：一份降低 severity 但 QoD 最高，一份提高 severity 但 QoD 最低。"""
+    """Duplicate a non-Log result twice: one with lower severity but the highest QoD, one with higher severity but the lowest QoD."""
     state = {}
 
     def edit(report):
@@ -135,7 +135,7 @@ def test_dedup_tie_on_severity_uses_qod(sample_tree, tmp_path):
 
 
 def test_count_mismatch_raises(sample_tree, tmp_path):
-    # 删除一条结果但不改 result_count，模拟导出被截断
+    # Delete a result without changing result_count, simulating a truncated export
     def edit(report):
         results = report.find("results")
         results.remove(results[0])
@@ -153,7 +153,7 @@ def test_filtered_full_mismatch_raises(sample_tree, tmp_path):
 
 
 def test_merge_two_reports(sample_tree, tmp_path, parsed):
-    """把样本改成另一台主机当作第二份报告：合并后条数相加，按主机统计。"""
+    """Turn the sample into another host as a second report: after merging the counts add up, per host."""
     def edit(report):
         report.set("id", "second-report")
         for h in report.iter("host"):

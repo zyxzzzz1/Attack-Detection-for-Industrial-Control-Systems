@@ -1,13 +1,13 @@
-"""M0：逐文件统计 HAI 数据并写入 reports/main/data_summary.md 与 attack_events.csv。
+"""M0: per-file statistics of the HAI data, written to reports/main/data_summary.md and attack_events.csv.
 
-每个文件：行数、时间范围、连续性（缺秒 / 重复 / 乱序）、列是否与 data/samples/hai_columns.txt 一致、
-缺失值、各标签的攻击秒数与事件数（事件 = 标签为 1 的连续区间）、每个攻击事件的子系统标签情况。
-train 文件另外统计常量列。全部文件两两之间按逐行内容哈希检查是否含有同一份数据（数据泄漏检查）。
+Per file: row count, time range, continuity (missing / duplicated / out-of-order seconds), whether columns match data/samples/hai_columns.txt,
+missing values, attack seconds and event count per label (event = contiguous run where the label is 1), and the subsystem labels of each attack event.
+train files additionally get constant-column statistics. All files are compared pairwise by per-row content hash for shared data (leakage check).
 
-逐文件读取、传感器用 float32、统计完即释放，不同时加载多个文件（哈希另读一遍 float64，只保留每行 8 字节）。
-test 文件在这里只做描述性统计（行数、时间、标签计数、行哈希），不读取其传感器取值分布，结果不用于调参（约束 2）。
+Files are read one at a time, sensors as float32, released after the statistics; several files are never loaded at once (hashing reads the file again as float64 and keeps only 8 bytes per row).
+test files get only descriptive statistics here (rows, times, label counts, row hashes); their sensor value distributions are not read, and nothing here is used for tuning (constraint 2).
 
-用法：
+Usage:
     python -m scripts.hai_data_summary [--config config/config.yaml] [--output-dir reports/main]
 """
 
@@ -31,7 +31,7 @@ EVENT_FIELDS = ["file", "event", "start", "end", "duration_s", "subsystems", "no
 
 
 def read_expected_columns(columns_txt: Path) -> list[str]:
-    """从 hai_columns.txt 取出按顺序排列的列名（忽略 # 注释行）。"""
+    """Return the ordered column names from hai_columns.txt (ignoring # comment lines)."""
     cols = []
     for line in columns_txt.read_text(encoding="utf-8").splitlines():
         m = COL_LINE_RE.match(line)
@@ -41,7 +41,7 @@ def read_expected_columns(columns_txt: Path) -> list[str]:
 
 
 def run_bounds(binary: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """返回每个取值为 1 的连续区间的 [start, end)。"""
+    """Return [start, end) of each contiguous run of 1s."""
     d = np.diff(np.concatenate(([0], (binary != 0).astype(np.int8), [0])))
     return np.flatnonzero(d == 1), np.flatnonzero(d == -1)
 
@@ -52,10 +52,10 @@ def run_lengths(binary: np.ndarray) -> np.ndarray:
 
 
 def attack_events(name: str, times: np.ndarray, main: np.ndarray, subs: np.ndarray, sub_names: list[str]) -> list[dict]:
-    """逐个攻击事件（总标签的连续区间）统计子系统标签：并集，以及没有任何子系统标签的秒的位置。
+    """Subsystem labels per attack event (contiguous run of the overall label): their union, and where the seconds without any subsystem label are.
 
-    no_sub_kind：none = 每秒都有子系统标签；whole = 整个事件都没有；
-    edge = 无标签的秒贴着事件的开头或结尾；interior = 只出现在事件内部。
+    no_sub_kind: none = every second has a subsystem label; whole = the whole event has none;
+    edge = unlabeled seconds touch the start or end of the event; interior = they occur only inside the event.
     """
     events = []
     for k, (s, e) in enumerate(zip(*run_bounds(main)), start=1):
@@ -141,7 +141,7 @@ def summarize_file(path: Path, expected_cols: list[str], time_col: str, label_co
 
 
 def file_row_hashes(path: Path, time_col: str, label_cols: list[str]) -> tuple[np.ndarray, np.ndarray]:
-    """返回（逐行内容哈希, 时间字符串）。哈希只用传感器列，按 float64 解析。"""
+    """Return (per-row content hashes, time strings). Hashes use only sensor columns, parsed as float64."""
     df = pd.read_csv(path, skipinitialspace=True)
     df.columns = [c.strip() for c in df.columns]
     features = [c for c in df.columns if c != time_col and c not in label_cols]
@@ -152,7 +152,7 @@ def file_row_hashes(path: Path, time_col: str, label_cols: list[str]) -> tuple[n
 
 
 def find_content_overlaps(hashes: dict[str, tuple[np.ndarray, np.ndarray]]) -> tuple[dict[str, int], list[dict]]:
-    """全部文件两两比较行哈希。返回（各文件内部内容重复的行数, 文件间的重叠段列表）。"""
+    """Compare row hashes of all file pairs. Return (rows with duplicated content within each file, list of overlapping runs between files)."""
     internal = {n: int(len(h) - len(np.unique(h))) for n, (h, _) in hashes.items()}
     runs = []
     for a, b in combinations(hashes, 2):
@@ -229,7 +229,7 @@ def render(stats: list[dict], cfg: dict, manifest: dict | None, expected_cols: l
         L.append(f"- {a['file']} 与 {b['file']} 之间间隔 {gap} 秒（{gap / 3600:.1f} 小时）：文件边界不连续，"
                  "滑窗不得跨越（约束 8）。")
 
-    # ---- 数据重叠（单独成节）----
+    # ---- Data overlap (its own section) ----
     n_pairs = len(stats) * (len(stats) - 1) // 2
     L += ["", "## 3. 文件之间的数据重叠（train 与 test 含有同一份数据）", "",
           "### 检测方法", "",
@@ -279,7 +279,7 @@ def render(stats: list[dict], cfg: dict, manifest: dict | None, expected_cols: l
     else:
         L.append("- train 与 test 之间没有相同内容的行，无需处理。")
 
-    # ---- 标签 ----
+    # ---- Labels ----
     L += ["", "## 4. 标签", "", "事件 = 标签为 1 的连续区间。", ""]
     rows = []
     for s in stats:
@@ -309,7 +309,7 @@ def render(stats: list[dict], cfg: dict, manifest: dict | None, expected_cols: l
     L.append("- 子系统标签的事件数可能多于总标签：同一个攻击事件内，子系统标签会断续出现（最短 1 秒）。"
              f"检测指标（逐点和事件级）只用 `{main}` 列，不受子系统标签影响。")
 
-    # ---- 无子系统标签的秒 ----
+    # ---- Seconds without subsystem labels ----
     events = [e for s in test for e in s["events"]]
     partial = [e for e in events if e["no_sub_s"] > 0]
     kinds = {k: [e for e in events if e["no_sub_kind"] == k] for k in ("whole", "edge", "interior")}

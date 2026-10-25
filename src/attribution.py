@@ -1,31 +1,31 @@
-"""传感器归因及其评估（M5，主线补充决策 7）。除 evaluate.py 外唯一读取 test 标签的模块。
+"""Sensor attribution and its evaluation (M5, main-line decision 7). Apart from evaluate.py, the only module that reads test labels.
 
-每个报警段内，各传感器 per_sensor_err 的均值归一化为占比，取 Top-k（k 来自 ml.attribution.top_k）。
-报警段、Top-k 的计算在 src/eval/alarms.py（不涉及标签），与 scripts/export_alerts.py 共用；这里只负责用标签评估：
+Within each alarm segment, the mean per_sensor_err of each sensor is normalized to a share and the Top-k is taken (k from ml.attribution.top_k).
+Alarm segments and Top-k are computed in src/eval/alarms.py (label-free), shared with scripts/export_alerts.py; this module only evaluates them against labels:
 
-- 只对与攻击事件重叠的报警段计算子系统命中率：Top-1 传感器所属子系统 ∈ 事件的子系统集合即为命中。
-  报警段与多个事件重叠时，按重叠时间最长的那个事件判断（主口径；重叠时间相同取较早的事件）；
-  另输出并集口径作为补充（Top-1 所属子系统 ∈ 这些事件子系统集合的并集），并报告与多个事件重叠的报警段数量。
-- 事件的子系统集合 = 事件内所有秒的 attack_P* 并集。并集为空的事件不计入命中率分母，单列为"无子系统标签事件"。
-- 单独统计 Top-1 落在 P4 的比例（P4 是 HIL 仿真，没有对应的子系统标签，Top-1 落在 P4 必然不命中）。
-- 不与攻击重叠的报警段单列，不计入命中率。
-- 传感器级 Hit@k 暂不做：HAI 21.03 的 CSV 没有逐传感器的攻击目标；拿到官方的攻击目标表后再补。
-- 按事件的命中率（2026-10-09 定）：主口径取每个事件的第一个与之重叠的报警段（运维人员最先看到的那一条），
-  看它的 Top-1 所属子系统是否在事件的子系统集合内；补充口径把事件区间内全部报警秒的误差合并后取 Top-1。
-- 所有命中率附 95% Wilson 置信区间；另按报警段长度分组（ml.attribution.duration_bins_s）给出命中率。
-- 多随机种子（ml.seed_study）：对每个种子的运行各算一遍，报告均值 ± 样本标准差。
-- 探索性分析（事后分析，不替换主结果）：段内误差先逐传感器除以它在 val_thr 上的平均误差再排 Top-k。
-  基线只来自 val_thr（运行目录的 val_sensor_contrib.csv），这一步没有用到任何测试标签；标签只用于事后评估命中率。
+- Subsystem hit rate is computed only for alarm segments overlapping an attack event: a hit if the Top-1 sensor's subsystem is in the event's subsystem set.
+  When a segment overlaps several events, the event with the longest overlap decides (primary definition; ties go to the earlier event);
+  a union definition is also output as a supplement (Top-1 subsystem in the union of those events' subsystem sets), together with the number of segments overlapping several events.
+- An event's subsystem set = union of attack_P* over all its seconds. Events with an empty union are excluded from the hit-rate denominator and listed as "events without subsystem labels".
+- The share of Top-1 falling in P4 is reported separately (P4 is a HIL simulation without a subsystem label, so a Top-1 in P4 is always a miss).
+- Alarm segments not overlapping any attack are listed separately and excluded from the hit rate.
+- Sensor-level Hit@k is not done for now: the HAI 21.03 CSVs have no per-sensor attack targets; to be added once the official attack-target table is available.
+- Per-event hit rate (decided 2026-10-09): the primary definition takes each event's first overlapping alarm segment (the one an operator sees first)
+  and checks whether its Top-1 subsystem is in the event's subsystem set; the supplementary definition merges the errors of all alarm seconds within the event and takes the Top-1.
+- All hit rates come with 95% Wilson confidence intervals; hit rates are also given per alarm-segment duration group (ml.attribution.duration_bins_s).
+- Multiple random seeds (ml.seed_study): computed once per seed run, reported as mean ± sample std.
+- Exploratory analysis (post hoc, does not replace the main results): in-segment errors are divided per sensor by its mean error on val_thr before ranking Top-k.
+  The baseline comes only from val_thr (val_sensor_contrib.csv in the run directory); this step uses no test labels; labels are only used afterwards to evaluate hit rates.
 
-输出（正式：reports/main/；--smoke：产物目录/smoke_reports/）：
-    attribution.csv            每个报警段一行（全部参与比较的模型）
-    attribution_summary.csv/.md  每个模型一行：命中率、P4 比例、各类报警段数量
-    attribution_heatmap_<模型>.png  每个被检出的事件在各子系统上的误差占比
-    attribution_by_duration.csv  按报警段长度分组的命中率（主结果与探索性分析各一组）
-    attribution_seeds.csv        多随机种子的逐种子命中率与均值、标准差
-    attribution_exploratory_valnorm.csv  探索性分析：按 val_thr 平均误差归一化前后的命中率
+Output (official: reports/main/; --smoke: <artifact dir>/smoke_reports/):
+    attribution.csv            one row per alarm segment (all compared models)
+    attribution_summary.csv/.md  one row per model: hit rates, P4 share, counts of each kind of alarm segment
+    attribution_heatmap_<model>.png  error share per subsystem for each detected event
+    attribution_by_duration.csv  hit rates per alarm-segment duration group (one set each for the main results and the exploratory analysis)
+    attribution_seeds.csv        per-seed hit rates with mean and std across the random seeds
+    attribution_exploratory_valnorm.csv  exploratory analysis: hit rates before and after normalizing by the val_thr mean error
 
-用法：
+Usage:
     python -m src.attribution [--models lstm_ae lstm_vae pca] [--smoke]
 """
 
@@ -54,11 +54,11 @@ SUMMARY_COLUMNS = ["model", "n_alarm_segments", "n_overlap_attack", "n_evaluable
                    "n_events_first_evaluable", "n_events_first_hit", "event_first_hit_rate",
                    "event_first_hit_rate_ci_low", "event_first_hit_rate_ci_high",
                    "n_events_merged_hit", "event_hit_rate", "event_hit_rate_ci_low", "event_hit_rate_ci_high"]
-RATE_COLUMNS = ("subsystem_hit_rate", "event_first_hit_rate", "event_hit_rate")  # 多种子汇总时取均值 ± 标准差的列
+RATE_COLUMNS = ("subsystem_hit_rate", "event_first_hit_rate", "event_hit_rate")  # Columns summarized as mean ± std across seeds
 
 
 def label_events(index: dict, labels: dict[str, pd.DataFrame], label_cols: list[str]) -> list[dict]:
-    """各段内的攻击事件及其子系统集合。part 为 test_index.json 中的第几段，start / end 为段内行号。"""
+    """Attack events per part and their subsystem sets. part is the index of the part in test_index.json; start / end are row numbers within the part."""
     main_col, sub_cols = label_cols[0], label_cols[1:]
     events = []
     for k, part in enumerate(index["files"]):
@@ -75,9 +75,9 @@ def label_events(index: dict, labels: dict[str, pd.DataFrame], label_cols: list[
 
 def attribute_run(scores: np.ndarray, per_sensor_err: np.ndarray, index: dict, threshold: float, merge_gap_s: int,
                   events: list[dict], ks: list[int], baseline: np.ndarray | None = None) -> tuple[list[dict], dict, list[dict]]:
-    """返回 (每个报警段的归因与评估, 汇总, 每个事件在各子系统上的误差占比)。
+    """Return (attribution and evaluation per alarm segment, summary, error share per subsystem for each event).
 
-    baseline 只用于探索性分析：各传感器在 val_thr 上的平均误差，给出时误差先除以它再算占比。
+    baseline is only for the exploratory analysis: each sensor's mean error on val_thr; when given, errors are divided by it before computing shares.
     """
     features = index["features"]
     rows, event_err = [], {}
@@ -86,10 +86,10 @@ def attribute_run(scores: np.ndarray, per_sensor_err: np.ndarray, index: dict, t
         tops = {k: top_k(shares, features, k) for k in ks}
         top1 = tops[ks[0]][0] if tops[ks[0]] else None
         hit_events = [e for e in events if e["part"] == seg["part"] and overlaps((seg["start"], seg["end"]), (e["start"], e["end"]))]
-        # 主口径：重叠时间最长的事件（max 取第一个最大值，事件按时间排列，所以相同时取较早的）
+        # Primary definition: the event with the longest overlap (max picks the first maximum and events are in time order, so ties go to the earlier one)
         primary = max(hit_events, key=lambda e: min(seg["end"], e["end"]) - max(seg["start"], e["start"]), default=None)
         target = primary["subsystems"] if primary else []
-        union = sorted({s for e in hit_events for s in e["subsystems"]})  # 补充口径
+        union = sorted({s for e in hit_events for s in e["subsystems"]})  # Supplementary definition
         top1_sub = subsystem_of(top1["sensor"]) if top1 else None
         if not hit_events:
             category, hit = "non_overlap", None
@@ -105,7 +105,7 @@ def attribute_run(scores: np.ndarray, per_sensor_err: np.ndarray, index: dict, t
                      "top1_subsystem": top1_sub, "top1_share": top1["share"] if top1 else None, "hit": hit,
                      "hit_union": (top1_sub in union) if union else None,
                      **{f"top{k}": json.dumps(tops[k], ensure_ascii=False) for k in ks}})
-        # 事件级：把与事件重叠的报警段内（事件区间之内的报警秒）的误差累加起来
+        # Event level: accumulate the errors within the alarm segments overlapping the event (only the alarm seconds inside the event interval)
         for e in hit_events:
             lo = index["files"][e["part"]]["offset"] + max(seg["start"], e["start"])
             hi = index["files"][e["part"]]["offset"] + min(seg["end"], e["end"])
@@ -152,7 +152,7 @@ def attribute_run(scores: np.ndarray, per_sensor_err: np.ndarray, index: dict, t
 
 
 def add_first_segment(event_rows: list[dict], rows: list[dict]) -> list[dict]:
-    """按事件的主口径：每个事件的第一个与之重叠的报警段（rows 按时间排列）及其 Top-1 是否命中。"""
+    """Primary per-event definition: each event's first overlapping alarm segment (rows are in time order) and whether its Top-1 is a hit."""
     first: dict[int, dict] = {}
     for r in rows:
         for eid in (int(x) for x in r["event_ids"].split("+") if x):
@@ -168,7 +168,7 @@ def add_first_segment(event_rows: list[dict], rows: list[dict]) -> list[dict]:
 
 
 def rate_with_ci(hits: list) -> dict:
-    """hits 中的 None 不计入分母。返回 n、n_hit、rate 与 95% Wilson 区间。"""
+    """None entries in hits are excluded from the denominator. Returns n, n_hit, rate and the 95% Wilson interval."""
     valid = [bool(h) for h in hits if h is not None]
     n, k = len(valid), sum(valid)
     lo, hi = wilson_interval(k, n)
@@ -176,7 +176,7 @@ def rate_with_ci(hits: list) -> dict:
 
 
 def full_summary(summary: dict, rows: list[dict], event_rows: list[dict]) -> dict:
-    """attribute_run 的汇总加上置信区间和按事件的两种口径。"""
+    """Summary of attribute_run plus confidence intervals and the two per-event definitions."""
     seg = rate_with_ci([r["hit"] for r in rows if r["category"] == "evaluable"])
     first = rate_with_ci([e["first_hit"] for e in event_rows])
     merged = rate_with_ci([e["hit"] for e in event_rows])
@@ -189,13 +189,13 @@ def full_summary(summary: dict, rows: list[dict], event_rows: list[dict]) -> dic
 
 
 def duration_group(duration_s: int, bins: list[int]) -> str:
-    """bins = [10, 60] → "<10 秒"、"10–60 秒"（含两端）、">60 秒"。"""
+    """bins = [10, 60] -> "<10 秒", "10–60 秒" (inclusive), ">60 秒"."""
     lo, hi = bins
     return f"<{lo} 秒" if duration_s < lo else f"{lo}–{hi} 秒" if duration_s <= hi else f">{hi} 秒"
 
 
 def by_duration(rows: list[dict], bins: list[int]) -> list[dict]:
-    """与攻击重叠且可评估的报警段，按长度分组的命中率。"""
+    """Hit rates of evaluable alarm segments overlapping attacks, grouped by duration."""
     groups = [f"<{bins[0]} 秒", f"{bins[0]}–{bins[1]} 秒", f">{bins[1]} 秒"]
     evaluable = [r for r in rows if r["category"] == "evaluable"]
     return [{"duration_group": g,
@@ -203,13 +203,13 @@ def by_duration(rows: list[dict], bins: list[int]) -> list[dict]:
 
 
 def val_thr_baseline(run_dir, features: list[str]) -> np.ndarray:
-    """各传感器在 val_thr 上的平均平方误差（diagnose 阶段写出，只依据 val_thr），按 features 的顺序。"""
+    """Mean squared error of each sensor on val_thr (written by the diagnose stage, based on val_thr only), in the order of features."""
     df = pd.read_csv(run_dir / CONTRIB_FILE).set_index("sensor")
     return df.loc[features, "mean_sq_err"].to_numpy(dtype=np.float64)
 
 
 def plot_heatmap(event_rows: list[dict], model: str, path, smoke: bool) -> None:
-    """行 = 被检出的事件，列 = 子系统，颜色 = 该事件报警秒内误差落在各子系统的占比；圆点标出标签中的受攻击子系统。"""
+    """Rows = detected events, columns = subsystems, color = share of the event's alarm-second error in each subsystem; dots mark the attacked subsystems according to the labels."""
     from src.utils.plotstyle import INK, SEQUENTIAL, SURFACE, apply_style, plt
     apply_style()
     df = pd.DataFrame(event_rows)
@@ -225,7 +225,7 @@ def plot_heatmap(event_rows: list[dict], model: str, path, smoke: bool) -> None:
     ax.set_yticks(range(len(df)), [f"{r.file.split('.')[0]} #{r.event_id}" for r in df.itertuples()], fontsize=7)
     ax.set_xticks(np.arange(len(cols) + 1) - 0.5, minor=True)
     ax.set_yticks(np.arange(len(df) + 1) - 0.5, minor=True)
-    ax.grid(which="minor", color=SURFACE, linewidth=2)  # 相邻色块之间留出底色间隙
+    ax.grid(which="minor", color=SURFACE, linewidth=2)  # Leave a background-colored gap between adjacent cells
     ax.tick_params(which="both", length=0)
     for s in ax.spines.values():
         s.set_visible(False)
@@ -325,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
               f"按事件：第一个报警段 {summary['n_events_first_hit']}/{summary['n_events_first_evaluable']}，"
               f"合并 {summary['n_events_merged_hit']}/{summary['n_events_first_evaluable']}")
 
-        # 探索性分析（事后）：按 val_thr 平均误差归一化
+        # Exploratory analysis (post hoc): normalize by the val_thr mean error
         if attr["exploratory_val_norm"] and (run.directory / CONTRIB_FILE).exists():
             n_rows, n_summary, n_events = analyse(run, val_thr_baseline(run.directory, run.features))
             duration_rows += [{"model": name, "variant": "valnorm", **d} for d in by_duration(n_rows, bins)]
@@ -343,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[探索性分析] {name}: 按 val_thr 归一化后报警段命中 {n_summary['n_hit']}/{n_summary['n_evaluable']}"
                   f"（主结果 {summary['n_hit']}/{summary['n_evaluable']}）；事后分析，不替换主结果")
 
-    # 多随机种子：对每个种子的运行各算一遍（正式模式；种子不齐时跳过）
+    # Multiple random seeds: compute once per seed run (official mode; skipped if seeds are incomplete)
     seed_df = None
     study = ml["seed_study"]
     if not args.smoke and study["model"] in models:

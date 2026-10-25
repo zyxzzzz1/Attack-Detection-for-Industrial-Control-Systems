@@ -1,15 +1,15 @@
-"""评估阶段：逐点指标 + 事件级指标。全项目只有这里（和归因命中率评估 attribution.py）读取 test 标签（约束 2）。
+"""Evaluation stage: point-wise + event-level metrics. In the whole project only this module (and the attribution hit-rate evaluation in attribution.py) reads test labels (constraint 2).
 
-- 检测指标只用 attack 列；子系统标签（attack_P*）只用来给每个事件记录子系统集合（事件内各秒的并集）。
-- 不使用 point-adjust（约束 4）。分数为 NaN 的秒（每个文件前 W−1 秒）不参与任何指标，数量记为 n_unscored。
-- 阈值来自 threshold.json（val_thr 分位数），这里不做任何调整。
+- Detection metrics use only the attack column; the subsystem labels (attack_P*) are only used to record each event's subsystem set (union over the event's seconds).
+- No point-adjust (constraint 4). Seconds with NaN scores (the first W−1 seconds of each file) are excluded from every metric; their count is recorded as n_unscored.
+- The threshold comes from threshold.json (val_thr quantile) and is not adjusted here in any way.
 
-产物（运行目录下）：
-    eval_metrics.json   汇总：逐点、事件级、分文件的逐点指标，以及主表的一行（main_row）
-    eval_events.csv     每个攻击事件：文件、起止时间、子系统集合、是否检出、延迟（画图脚本从这里取攻击区间，不再读标签）
-    eval_alarms.csv     每个报警段：文件、起止时间、是否与攻击事件重叠
+Artifacts (in the run directory):
+    eval_metrics.json   summary: point-wise, event-level and per-file point-wise metrics, plus the main-table row (main_row)
+    eval_events.csv     each attack event: file, start/end, subsystem set, detected or not, delay (plotting scripts take attack intervals from here instead of reading labels)
+    eval_alarms.csv     each alarm segment: file, start/end, whether it overlaps an attack event
 
-用法：
+Usage:
     python -m src.evaluate --model pca [--smoke]
 """
 
@@ -31,7 +31,7 @@ MAIN_COLUMNS = ["model", "precision", "recall", "f1", "auroc", "event_recall", "
 
 
 def clean(obj):
-    """NaN → None，numpy 标量 → python 标量，便于写成标准 JSON。"""
+    """NaN -> None, numpy scalars -> python scalars, so the result can be written as standard JSON."""
     if isinstance(obj, dict):
         return {k: clean(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
@@ -43,9 +43,9 @@ def clean(obj):
 
 def evaluate_scores(scores: np.ndarray, index: dict, labels: dict[str, pd.DataFrame], threshold: float,
                     time_col: str, label_cols: list[str], merge_gap_s: int):
-    """scores 为各 test 文件拼接的逐秒分数；index 为 test_index.json；labels 为各文件的标签表。
+    """scores are the per-second scores of all test files concatenated; index is test_index.json; labels are the label tables per file.
 
-    冒烟测试时每个文件只打了前一部分的分，标签按同样的行数截取。返回 (汇总 dict, 事件表, 报警段表)。
+    In smoke tests only the first part of each file was scored, and labels are cut to the same number of rows. Returns (summary dict, event table, alarm-segment table).
     """
     main_col, sub_cols = label_cols[0], label_cols[1:]
     per_file, pairs, tables = [], [], []
@@ -70,11 +70,11 @@ def evaluate_scores(scores: np.ndarray, index: dict, labels: dict[str, pd.DataFr
         out.insert(0, "file", [index["files"][k]["file"] for k in out["file_index"]])
         for col in ("start", "end"):
             out[f"{col}_time"] = [tables[k][time_col].iloc[i] for k, i in zip(out["file_index"], out[col])]
-        return out.rename(columns={"file_index": "part"})  # part = test_index.json 中的第几段
+        return out.rename(columns={"file_index": "part"})  # part = index of the part in test_index.json
 
     events_df, alarms_df = with_times(events), with_times(alarms)
     if not events_df.empty:
-        # 事件的子系统集合 = 事件内所有秒的子系统标签并集；并集为空的事件单列（主线补充决策 7）
+        # An event's subsystem set = union of subsystem labels over its seconds; events with an empty union are listed separately (main-line decision 7)
         subsystems = []
         for e in events:
             block = tables[e["file_index"]].iloc[e["start"]:e["end"] + 1]
@@ -99,7 +99,7 @@ def run(ctx) -> dict:
     main_row = {"model": ctx.model, **{k: point[k] for k in ("precision", "recall", "f1", "auroc")},
                 **{k: event[k] for k in ("event_recall", "delay_median_s", "delay_mean_s", "false_alarms_per_hour")},
                 "threshold": thr["threshold"], "n_unscored": point["n_unscored"]}
-    # 阈值分位的敏感性（只作分析，不据此选阈值）：用 threshold.json 中其他分位的阈值重算同一套指标
+    # Threshold-quantile sensitivity (analysis only, never for choosing the threshold): recompute the same metrics with the other quantile thresholds in threshold.json
     sensitivity = {}
     for q, value in thr.get("sensitivity", {}).items():
         s, _, _ = evaluate_scores(scores, index, labels, value, hai["time_col"], hai["label_cols"],

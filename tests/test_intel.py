@@ -1,4 +1,4 @@
-"""src/vuln/intel.py 的测试：用假 session 模拟 KEV/EPSS 响应，不联网。"""
+"""Tests of src/vuln/intel.py: a fake session simulates the KEV/EPSS responses; no network."""
 
 import json
 import os
@@ -32,7 +32,7 @@ class FakeResp:
 
 
 class FakeSession:
-    """按 URL 分发的假 session；fail 为待消费的失败序列（异常或状态码）。"""
+    """Fake session dispatching by URL; fail is a queue of failures (exceptions or status codes) to consume."""
 
     def __init__(self, fail=()):
         self.calls = []
@@ -77,13 +77,13 @@ def test_enrich_fields(cfg):
     data = vulns(["CVE-2015-0240", "CVE-2012-1823"], ["CVE-2011-2523"], [], ["CVE-1999-0001"])
     out = enrich(data, cfg, session=FakeSession())
     v0, v1, v2, v3 = out["vulns"]
-    # 多 CVE：in_kev 任一为真，epss 取最大
+    # Several CVEs: in_kev true if any is, epss takes the maximum
     assert v0["in_kev"] is True and v0["kev_cves"] == ["CVE-2015-0240"] and v0["epss"] == pytest.approx(0.88008)
     assert v1["in_kev"] is False and v1["kev_cves"] == [] and v1["epss"] == pytest.approx(0.945)
-    # 无 CVE / EPSS 无记录
+    # No CVEs / no EPSS record
     assert (v2["in_kev"], v2["epss"], v2["kev_cves"]) == (False, 0.0, [])
     assert v3["epss"] == 0.0
-    # 原字段保留，输入不被修改
+    # Original fields are kept and the input is not modified
     assert v0["name"] == "v0" and "in_kev" not in data["vulns"][0]
     info = out["intel"]
     assert info["cves_in_kev"] == ["CVE-2015-0240"]
@@ -99,9 +99,9 @@ def test_epss_cache_written_and_reused(cfg, tmp_path):
     rows = read_epss_cache(tmp_path / "intel" / "epss.csv")
     assert rows["CVE-2015-0240"]["date"] == "2026-09-29"
     assert rows["CVE-2015-0240"]["fetched_at"]
-    assert rows["CVE-1999-0001"]["epss"] == ""  # 无记录也缓存，避免重复查询
+    assert rows["CVE-1999-0001"]["epss"] == ""  # Missing records are cached too, to avoid repeated queries
 
-    # 第二次：已缓存的不再查询，只查新增的 CVE
+    # Second time: cached CVEs are not queried again, only new ones
     s2 = FakeSession()
     enrich(vulns(["CVE-2015-0240", "CVE-1999-0001", "CVE-2011-2523"]), cfg, session=s2)
     assert [p["cve"] for _, p in s2.epss_calls()] == ["CVE-2011-2523"]
@@ -115,7 +115,7 @@ def test_batches_respect_limits():
     for batch in make_batches(cves, 2000, 100):
         assert len(",".join(batch)) <= 2000 and len(batch) <= 100
     assert sum(len(b) for b in make_batches(cves, 2000, 100)) == 1086
-    # 字符数先到上限的情况
+    # Case where the character limit is reached first
     small = make_batches(cves, 100, 1000)
     assert all(len(",".join(b)) <= 100 for b in small)
     assert [c for b in small for c in b] == cves
@@ -136,11 +136,11 @@ def test_kev_cache_age(cfg, tmp_path):
     s1 = FakeSession()
     enrich(vulns(["CVE-2015-0240"]), cfg, session=s1)
     assert sum(u == KEV_URL for u, _ in s1.calls) == 1
-    # 缓存未过期：不下载
+    # Cache not expired: no download
     s2 = FakeSession()
     enrich(vulns(["CVE-2015-0240"]), cfg, session=s2)
     assert all(u != KEV_URL for u, _ in s2.calls)
-    # 缓存超过 24 小时：重新下载
+    # Cache older than 24 hours: download again
     kev_path = tmp_path / "intel" / "kev.json"
     old = time.time() - 25 * 3600
     os.utime(kev_path, (old, old))
@@ -153,7 +153,7 @@ def test_offline_uses_cache_only(cfg, tmp_path):
     enrich(vulns(["CVE-2015-0240"]), cfg, session=FakeSession())
     kev_path = tmp_path / "intel" / "kev.json"
     old = time.time() - 48 * 3600
-    os.utime(kev_path, (old, old))  # 即使过期，离线也用缓存
+    os.utime(kev_path, (old, old))  # Even when expired, offline mode uses the cache
     s = FakeSession()
     out = enrich(vulns(["CVE-2015-0240"]), cfg, session=s, offline=True)
     assert s.calls == [] and out["vulns"][0]["in_kev"] is True
@@ -203,7 +203,7 @@ def test_epss_truncated_page_raises(cfg):
 def test_stale_missing_epss_requeried(cfg, tmp_path):
     enrich(vulns(["CVE-2015-0240", "CVE-1999-0001"]), cfg, session=FakeSession())
     path = tmp_path / "intel" / "epss.csv"
-    # 6 天前的空记录：不重新查询
+    # Empty record from 6 days ago: not re-queried
     rows = read_epss_cache(path)
     for r in rows.values():
         r["fetched_at"] = "2026-01-01T00:00:00+00:00"
@@ -212,11 +212,11 @@ def test_stale_missing_epss_requeried(cfg, tmp_path):
     s = FakeSession()
     enrich(vulns(["CVE-2015-0240", "CVE-1999-0001"]), cfg, session=s)
     assert s.epss_calls() == []
-    # 8 天前的空记录：重新查询；有分数的旧记录不重新查询
+    # Empty record from 8 days ago: re-queried; old records with a score are not
     rows["CVE-1999-0001"]["fetched_at"] = datetime.fromtimestamp(time.time() - 8 * 86400, timezone.utc).isoformat()
     write_epss_cache(path, rows)
     s_off = FakeSession()
-    enrich(vulns(["CVE-2015-0240", "CVE-1999-0001"]), cfg, session=s_off, offline=True)  # 离线仍可用
+    enrich(vulns(["CVE-2015-0240", "CVE-1999-0001"]), cfg, session=s_off, offline=True)  # Still usable offline
     assert s_off.calls == []
     s = FakeSession()
     enrich(vulns(["CVE-2015-0240", "CVE-1999-0001"]), cfg, session=s)

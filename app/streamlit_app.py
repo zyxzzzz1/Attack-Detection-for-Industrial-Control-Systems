@@ -1,10 +1,11 @@
-"""E5：Streamlit 演示——告警列表 + 告警卡片 + 资产风险，侧边栏调参实时重算（不写任何文件）。
+"""E5: Streamlit demo -- alert list + alert cards + asset risk; sidebar parameters recompute live (writes no files).
 
-数据：默认读真实报警 fusion.alerts_json（LSTM-AE 的全部报警段），侧边栏可切换到 mock 报警 fusion.mock_alerts_json；
-加上 vuln.vulns_enriched_json 与资产图。全部报警都参与融合打分，列表和卡片只显示优先级最高的前
-fusion.max_rendered_alerts 条。卡片复用 templates/alert_card.md.j2，与离线生成的卡片内容一致。
+Data: by default the real alerts fusion.alerts_json (all alarm segments of LSTM-AE); the sidebar can switch to the mock
+alerts fusion.mock_alerts_json; plus vuln.vulns_enriched_json and the asset graph. All alerts take part in fusion scoring;
+the list and the cards show only the top fusion.max_rendered_alerts by priority. Cards reuse templates/alert_card.md.j2,
+so their content matches the offline cards.
 
-用法：
+Usage:
     .venv/bin/streamlit run app/streamlit_app.py
 """
 
@@ -17,7 +18,7 @@ import streamlit as st
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:  # streamlit 以脚本方式运行，需要手动加入项目根目录
+if str(ROOT) not in sys.path:  # streamlit runs this as a script, so the project root has to be added manually
     sys.path.insert(0, str(ROOT))
 
 from src.fusion.asset_graph import AssetGraph  # noqa: E402
@@ -28,9 +29,9 @@ from src.utils import i18n  # noqa: E402
 from src.utils.i18n import disclaimer, t, t_data  # noqa: E402
 
 
-# 告警级 E_sub 的评估状态 → "路径风险"一列的文字
+# Assessment status of the alert-level E_sub -> text of the "path risk" column
 PATH_RISK_TEXT = {"assessed": "已评估", "partial": "可能低估", "not_assessed": "未评估：上游资产均未扫描"}
-SOURCE_REAL, SOURCE_MOCK = "真实报警（LSTM-AE）", "mock 报警"   # 内部键（中文源文），显示时经 t()
+SOURCE_REAL, SOURCE_MOCK = "真实报警（LSTM-AE）", "mock 报警"   # Internal keys (Chinese source text), passed through t() for display
 
 
 @st.cache_data
@@ -55,7 +56,7 @@ def fmt_risk(x) -> str:
 
 
 def subsystem_esub_text(s: dict) -> str:
-    """子系统 E_sub 的显示文字：上游资产全部未扫描时写明未评估；没有任何资产（P4）时写明无控制链，不算"未评估"。"""
+    """Display text for a subsystem's E_sub: "not assessed" when all upstream assets are unscanned; "no control chain" when there are no assets at all (P4), which does not count as "not assessed"."""
     if s["E_sub_assessed"]:
         return f"{s['E_sub']:.3f}"
     if s["unassessed_assets"]:
@@ -87,7 +88,7 @@ def ranking_table(result: dict, baseline: dict, limit: int | None = None) -> pd.
 def main() -> None:
     data = load_data(str(ROOT / "config" / "config.yaml"))
     cfg, defaults = data["cfg"], data["params"]
-    i18n.configure(cfg)   # 显示语言（ui.lang）
+    i18n.configure(cfg)   # Display language (ui.lang)
     st.set_page_config(page_title=t("融合告警演示"), layout="wide")
     graph = AssetGraph.from_yaml(ROOT / cfg["fusion"]["asset_map"])
 
@@ -150,7 +151,7 @@ def main() -> None:
                 for aid, a in result["asset_risk"].items()]), hide_index=True, use_container_width=True)
         with right:
             st.subheader(t("子系统暴露风险 E_sub"))
-            # st.table 的单元格自动换行（"未评估上游"一列较长，st.dataframe 会截断）
+            # Cells of st.table wrap automatically (the "unassessed upstream" column is long; st.dataframe would truncate it)
             st.table(pd.DataFrame([
                 {t("子系统"): sid, t("名称"): t_data(graph.subsystems[sid].name),
                  "E_sub": subsystem_esub_text(s),

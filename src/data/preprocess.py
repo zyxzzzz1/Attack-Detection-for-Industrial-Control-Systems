@@ -1,9 +1,9 @@
-"""预处理：删除训练部分的常量列，StandardScaler 只在训练部分 fit（约束 5），输出 float32。
+"""Preprocessing: drop constant columns of the training part, fit StandardScaler on the training part only (constraint 5), output float32.
 
-顺序固定为：删除与 test 重叠的行（load_hai）→ 切分 train | val_es | val_thr → 在 train 部分上判定常量列 → fit scaler。
-常量列与 scaler 都只看 train 部分，不看 val_es / val_thr / test。
+Fixed order: drop rows overlapping test (load_hai) -> split train | val_es | val_thr -> determine constant columns on the train part -> fit scaler.
+Constant columns and the scaler look only at the train part, never at val_es / val_thr / test.
 
-用法（只打印数据划分与预处理摘要，可选保存 scaler）：
+Usage (only prints the data split and preprocessing summary; optionally saves the scaler):
     python -m src.data.preprocess [--fraction 0.01] [--save-dir DIR]
 """
 
@@ -22,12 +22,12 @@ from src.utils.paths import DEFAULT_CONFIG, load_config
 
 
 class Preprocessor:
-    """常量列删除 + 标准化。fit 只接受训练部分的段。"""
+    """Constant-column removal + standardization. fit accepts only segments of the training part."""
 
     def __init__(self) -> None:
-        self.columns: list[str] = []       # 输入列（全部传感器）
+        self.columns: list[str] = []       # Input columns (all sensors)
         self.constant_cols: list[str] = []
-        self.features: list[str] = []      # 保留的特征列
+        self.features: list[str] = []      # Feature columns kept
         self.scaler: StandardScaler | None = None
         self.n_fit_rows = 0
 
@@ -44,7 +44,7 @@ class Preprocessor:
         self.features = [c for c, k in zip(self.columns, keep) if k]
         self._keep_idx = np.flatnonzero(keep)
         self.scaler = StandardScaler()
-        for s in train_segments:  # 逐段累积，避免再拼一份完整拷贝；用 float64 计算均值方差
+        for s in train_segments:  # Accumulate segment by segment to avoid building another full copy; compute mean and variance in float64
             self.scaler.partial_fit(s.x[:, self._keep_idx].astype(np.float64))
         self.n_fit_rows = sum(len(s) for s in train_segments)
         return self
@@ -72,7 +72,7 @@ class Preprocessor:
 @dataclass
 class TrainData:
     pre: Preprocessor
-    segments: dict[str, list[Segment]]  # train / val_es / val_thr，已标准化
+    segments: dict[str, list[Segment]]  # train / val_es / val_thr, standardized
 
     def dataset(self, split: str, window: int, stride: int) -> WindowDataset:
         return WindowDataset([s.x for s in self.segments[split]], window, stride)
@@ -88,7 +88,7 @@ class TrainData:
 
 
 def prepare_train(cfg: dict, fraction: float = 1.0) -> TrainData:
-    """读取 train 文件 → 切分 → 在 train 部分 fit 预处理 → 变换三个部分。不读取 test 文件。"""
+    """Read train files -> split -> fit preprocessing on the train part -> transform all three parts. Does not read test files."""
     data_cfg = cfg["ml"]["data"]
     raw = split_segments(load_train_segments(cfg, fraction), data_cfg["val_fraction"], data_cfg["val_es_fraction"])
     pre = Preprocessor().fit(raw["train"])
@@ -96,7 +96,7 @@ def prepare_train(cfg: dict, fraction: float = 1.0) -> TrainData:
 
 
 def prepare_test(cfg: dict, pre: Preprocessor, fraction: float = 1.0) -> list[Segment]:
-    """用已 fit 的预处理变换 test 文件（每个文件一段）。只应由打分 / 最终评估流程调用（约束 2）。"""
+    """Transform the test files (one segment per file) with the fitted preprocessing. Must only be called by the scoring / final evaluation pipeline (constraint 2)."""
     return [pre.transform(s) for s in load_test_segments(cfg, fraction)]
 
 

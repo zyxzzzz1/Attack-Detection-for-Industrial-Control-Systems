@@ -1,19 +1,19 @@
-"""融合排序的评估（I1）：前 k 条报警里有多少条是真的，比较三种排序。
+"""Evaluation of the fusion ranking (I1): how many of the top k alerts are real, comparing three rankings.
 
-- raw_score：按报警段的最大异常分数从大到小。
-- alpha=0：融合优先级 priority，但 alpha = 0（不使用漏洞暴露风险 E_sub，只有异常严重度 S 与子系统关键度）。
-- alpha=1：融合优先级 priority，alpha = 1（config/fusion.yaml 的默认值）。
+- raw_score: by the maximum anomaly score of the alarm segment, descending.
+- alpha=0: fusion priority, but with alpha = 0 (no vulnerability exposure risk E_sub, only anomaly severity S and subsystem criticality).
+- alpha=1: fusion priority with alpha = 1 (the default in config/fusion.yaml).
 
-precision@k = 排在前 k 条的报警中与攻击事件重叠的比例。"是否与攻击事件重叠"取自 evaluate 阶段写出的
-eval_alarms.csv（标签只在 evaluate.py 中读取）；本模块不读取标签，scripts/export_alerts.py 和 alerts.json 里也没有这一列。
-报警与 eval_alarms.csv 的行按顺序一一对应（同一个 to_segments），对不上时报错。
+precision@k = fraction of the top k alerts that are true alarms (overlap a labeled event). "True alarm or not" comes from eval_alarms.csv
+written by the evaluate stage (ground truth is read only in evaluate.py); this module reads no ground truth, and neither scripts/export_alerts.py nor alerts.json has this column.
+Alerts and the rows of eval_alarms.csv correspond one-to-one in order (same to_segments); a mismatch raises an error.
 
-注意（约束 7）：资产映射是人为构造的，漏洞数据来自实验靶机，与 HAI 中的攻击没有因果关系。
-这里的比较只说明"按这套公式排序后，真报警排得靠前还是靠后"，不能说明漏洞上下文提升了检测能力。
+Note (constraint 7): the asset mapping is constructed by hand and the vulnerability data come from lab targets, with no causal link to the intrusions in HAI.
+This comparison only shows whether real alarms rank high or low under this formula; it does not show that vulnerability context improves detection.
 
-输出（正式：reports/main/；--smoke：产物目录/smoke_reports/）：fusion_ranking_eval.csv / .md
+Output (official: reports/main/; --smoke: <artifact dir>/smoke_reports/): fusion_ranking_eval.csv / .md
 
-用法：
+Usage:
     python -m src.eval.fusion_ranking [--smoke]
 """
 
@@ -35,7 +35,7 @@ COLUMNS = ["ranking", "k", "n_true", "precision", "ci_low", "ci_high", "n_alerts
 
 
 def truth_by_alert(alerts: list[dict], alarms: pd.DataFrame) -> dict[str, bool]:
-    """alert_id → 是否与攻击事件重叠。两边必须是同一批报警段。"""
+    """alert_id -> whether it is a true alarm (overlaps a labeled event). Both sides must be the same set of alarm segments."""
     if len(alerts) != len(alarms):
         raise ValueError(f"alerts.json 有 {len(alerts)} 条，eval_alarms.csv 有 {len(alarms)} 行：不是同一次运行的产物")
     for a, row in zip(alerts, alarms.itertuples()):
@@ -45,7 +45,7 @@ def truth_by_alert(alerts: list[dict], alarms: pd.DataFrame) -> dict[str, bool]:
 
 
 def rankings(alerts: list[dict], vulns: list[dict], graph: AssetGraph, params: dict) -> dict[str, list[tuple[str, float]]]:
-    """三种排序，各为 [(alert_id, 排序用的值), ...]。并列时都按 alert_id（即时间顺序）排。"""
+    """The three rankings, each as [(alert_id, ranking value), ...]. Ties are broken by alert_id (i.e. time order)."""
     out = {"raw_score": sorted(((a["alert_id"], a["max_score"]) for a in alerts), key=lambda x: (-x[1], x[0]))}
     for alpha in (0.0, 1.0):
         ranked = prioritize(alerts, vulns, graph, {**params, "alpha": alpha})["alerts"]
@@ -61,10 +61,10 @@ def evaluate_rankings(ranked: dict[str, list[tuple[str, float]]], truth: dict[st
         hits = [truth[i] for i, _ in order]
         for k in ks:
             kk = min(k, n)
-            shared = len({i for i, _ in order[:kk]} & set(reference[:kk]))  # 前 k 条中与原始分数排序相同的报警条数
+            shared = len({i for i, _ in order[:kk]} & set(reference[:kk]))  # Number of alerts in the top k shared with the raw-score ranking
             n_hit = sum(hits[:kk])
             lo, hi = wilson_interval(n_hit, kk)
-            # 与第 k 条的排序值相同的报警条数：大于 1 说明第 k 条附近是并列的，谁排进前 k 取决于并列时的次序
+            # Number of alerts with the same ranking value as the k-th: more than 1 means there are ties around position k, and which ones make the top k depends on tie order
             tied = sum(v == order[kk - 1][1] for _, v in order) if kk else 0
             rows.append({"ranking": name, "k": k, "n_true": n_hit, "precision": precision_at_k(hits, k),
                          "ci_low": lo, "ci_high": hi, "n_alerts": n, "n_true_total": n_true,

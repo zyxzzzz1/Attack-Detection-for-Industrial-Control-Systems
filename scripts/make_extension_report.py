@@ -1,12 +1,12 @@
-"""E6：生成扩展部分报告素材到 reports/extension/（全部基于真实扫描数据与资产映射，不含 mock 报警）。
+"""E6: generate the extension report material into reports/extension/ (all based on real scan data and the asset map, no mock alerts).
 
-输出：
-- asset_topology.png   资产拓扑图（Purdue 分层、可达边、是否评估、R_asset）
-- qod_distribution.png QoD 分布（min_qod 阈值两侧，保留 / 丢弃）
-- kev_table.md         命中 KEV 的漏洞表（QoD、CVSS、EPSS、是否参与风险计算）
-- key_numbers.md       关键数字汇总（解析、情报、QoD 过滤、R_asset / E_sub、风险饱和），含 QoD 分布数据表
+Output:
+- asset_topology.png   asset topology (Purdue levels, reachability edges, assessed or not, R_asset)
+- qod_distribution.png QoD distribution (either side of the min_qod threshold, kept / dropped)
+- kev_table.md         table of vulnerabilities in KEV (QoD, CVSS, EPSS, whether used in risk computation)
+- key_numbers.md       key numbers (parsing, intel, QoD filtering, R_asset / E_sub, risk saturation), including the QoD distribution table
 
-用法：
+Usage:
     python -m scripts.make_extension_report [--output-dir DIR]
 """
 
@@ -29,21 +29,21 @@ from src.fusion.risk import compute_risk, load_params, vuln_risk  # noqa: E402
 from src.utils.i18n import DISCLAIMER_ZH, disclaimer, t, t_data  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-WRAP_ASSET, WRAP_SUBSYSTEM = 30, 28   # 拓扑图方框内每行的最大字符数
-DISCLAIMER = DISCLAIMER_ZH  # md 文档（中文）用；图上的免责声明按 ui.lang 取 disclaimer()
+WRAP_ASSET, WRAP_SUBSYSTEM = 30, 28   # Maximum characters per line inside a topology box
+DISCLAIMER = DISCLAIMER_ZH  # For the md documents (Chinese); the disclaimer on figures uses disclaimer() per ui.lang
 
-# 配色（dataviz 参考调色板，浅色）：蓝 = 保留 / 已评估；灰 + 斜线纹理 = 丢弃 / 未评估
+# Colors (dataviz reference palette, light): blue = kept / assessed; gray + hatching = dropped / not assessed
 SURFACE, INK, INK2, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3df"
 BLUE, BLUE_LIGHT, GRAY, HATCH = "#2a78d6", "#cde2fb", "#a3a29d", "#d6d5d0"
 plt.rcParams.update({
-    "font.family": ["Noto Sans CJK JP", "DejaVu Sans"],  # .ttc 在 matplotlib 中登记为 JP，含简体字形
+    "font.family": ["Noto Sans CJK JP", "DejaVu Sans"],  # The .ttc is registered in matplotlib as JP but contains Simplified Chinese glyphs
     "axes.unicode_minus": False, "figure.facecolor": SURFACE, "axes.facecolor": SURFACE,
     "text.color": INK, "axes.labelcolor": INK2, "xtick.color": INK2, "ytick.color": INK2,
     "axes.edgecolor": GRID, "savefig.dpi": 200,
 })
 
 
-# ---------------------------------------------------------------- 数据
+# ---------------------------------------------------------------- data
 
 def load_inputs(cfg: dict) -> dict:
     enriched = json.loads((ROOT / cfg["vuln"]["vulns_enriched_json"]).read_text(encoding="utf-8"))
@@ -58,7 +58,7 @@ def qod_counts(vulns: list[dict]) -> list[tuple[int, int]]:
     return sorted(Counter(v["qod"] for v in vulns).items())
 
 
-# ---------------------------------------------------------------- 图
+# ---------------------------------------------------------------- figures
 
 def plot_qod(vulns: list[dict], min_qod: int, path: Path) -> None:
     counts = qod_counts(vulns)
@@ -70,7 +70,7 @@ def plot_qod(vulns: list[dict], min_qod: int, path: Path) -> None:
                edgecolor=SURFACE if kept else "#6f6e69", linewidth=0 if kept else 0.6)
         ax.text(x, n, f"{n}", ha="center", va="bottom", fontsize=9, color=INK)
     ax.set_xticks(xs, [str(q) for q, _ in counts])
-    # 阈值位置：落在最后一个 < min_qod 与第一个 >= min_qod 之间
+    # Threshold position: between the last value < min_qod and the first value >= min_qod
     cut = sum(q < min_qod for q, _ in counts) - 0.5
     ax.axvline(cut, color=INK2, linestyle="--", linewidth=1)
     ax.set_ylim(0, max(n for _, n in counts) * 1.12)
@@ -93,8 +93,8 @@ def plot_qod(vulns: list[dict], min_qod: int, path: Path) -> None:
 
 
 def topology_positions(graph: AssetGraph) -> dict[str, tuple[float, float]]:
-    """按 Purdue 层级分行。L1 按名称排开；更高层按下游节点 x 的均值（重心）排序，减少连线交叉。
-    子系统放在其 PLC 正下方，无 PLC 的子系统（P4）放在最右侧。"""
+    """Lay out rows by Purdue level. L1 is ordered by name; higher levels are ordered by the mean x of their downstream nodes (barycenter) to reduce edge crossings.
+    Subsystems are placed directly below their PLC; subsystems without a PLC (P4) go on the far right."""
     children: dict[str, list[str]] = {a: [] for a in graph.assets}
     for src, dst in graph.map.edges:
         children[src].append(dst)
@@ -126,7 +126,7 @@ def topology_positions(graph: AssetGraph) -> dict[str, tuple[float, float]]:
 
 
 def asset_head(asset) -> str:
-    """拓扑图方框里资产名下面的一行：角色 · IP；没有 IP 的资产只写角色。"""
+    """The line under the asset name in a topology box: role · IP; assets without an IP show only the role."""
     return t_data(asset.role) + (f" · {asset.ip}" if asset.ip else "")
 
 
@@ -138,7 +138,7 @@ def plot_topology(graph: AssetGraph, risk: dict, path: Path) -> None:
     def box(x, y, fill, edge, hatch=None, dashed=False):
         style = dict(boxstyle="round,pad=0.02,rounding_size=0.06")
         if hatch:
-            # 纹理单独一层（浅色），边框另画，避免纹理压住文字
+            # Hatching on its own (light) layer, border drawn separately, so the hatching does not cover the text
             ax.add_patch(FancyBboxPatch((x - w / 2, y - h / 2), w, h, facecolor=fill, edgecolor=HATCH,
                                         hatch=hatch, linewidth=0, zorder=2, **style))
             fill = "none"
@@ -167,7 +167,7 @@ def plot_topology(graph: AssetGraph, risk: dict, path: Path) -> None:
         head = asset_head(a)
         label_bg = dict(facecolor=SURFACE if not r["assessed"] else BLUE_LIGHT, edgecolor="none", pad=1.5)
         ax.text(x, y + 0.09, aid, ha="center", va="center", fontsize=10, weight="bold", zorder=3, bbox=label_bg)
-        # 英文角色名较长：超过方框宽度时折行（中文不受影响）
+        # English role names are long: wrap when wider than the box (Chinese is unaffected)
         ax.text(x, y - 0.08 - 0.03 * (len(head) > WRAP_ASSET),
                 textwrap.fill(head, WRAP_ASSET) + f"\n{detail}", ha="center", va="center", fontsize=7.5,
                 color=INK2, zorder=3, linespacing=1.3, bbox=label_bg)
@@ -184,7 +184,7 @@ def plot_topology(graph: AssetGraph, risk: dict, path: Path) -> None:
         box(x, y, "#f0efec", GRID)
         ax.text(x, y + 0.08, textwrap.fill(f"{sid} {t_data(sub.name)}", WRAP_SUBSYSTEM), ha="center", va="center", fontsize=8.5, weight="bold", zorder=3)
         crit = t("关键度 {c}").format(c=sub.criticality)
-        sep = "\n" if len(crit) + len(label) + 3 > WRAP_ASSET else " · "   # 一行放不下时分成两行
+        sep = "\n" if len(crit) + len(label) + 3 > WRAP_ASSET else " · "   # Split into two lines when one line does not fit
         ax.text(x, y - (0.12 if sep == "\n" else 0.1), f"{crit}{sep}{label}", ha="center", va="center", fontsize=7.5,
                 color=INK2, zorder=3, linespacing=1.25)
 
@@ -207,7 +207,7 @@ def plot_topology(graph: AssetGraph, risk: dict, path: Path) -> None:
     plt.close(fig)
 
 
-# ---------------------------------------------------------------- 表与数字
+# ---------------------------------------------------------------- tables and numbers
 
 def kev_table(vulns: list[dict], params: dict, kev_version: str) -> str:
     rows = [v for v in vulns if v["in_kev"]]

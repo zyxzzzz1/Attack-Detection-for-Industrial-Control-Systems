@@ -1,4 +1,4 @@
-"""app/streamlit_app.py 的冒烟测试：用 streamlit 自带的 AppTest 无界面运行。"""
+"""Smoke test of app/streamlit_app.py: runs headless with streamlit's built-in AppTest."""
 
 import json
 from pathlib import Path
@@ -17,7 +17,7 @@ def use_mock(at):
 
 
 def test_app_defaults_to_real_alerts():
-    """默认读真实报警：没有 MOCK 提示，只列出优先级最高的前 N 条，卡片是真实报警的卡片。"""
+    """Real alerts by default: no MOCK notice, only the top N by priority are listed, and the cards are those of the real alerts."""
     fcfg = yaml.safe_load((ROOT / "config" / "config.yaml").read_text(encoding="utf-8"))["fusion"]
     n_real = len(json.loads((ROOT / fcfg["alerts_json"]).read_text(encoding="utf-8")))
     at = AppTest.from_file(APP, default_timeout=120).run()
@@ -45,14 +45,14 @@ def test_app_can_switch_back_to_mock():
 
 def test_param_change_updates_ranking():
     at = use_mock(AppTest.from_file(APP, default_timeout=120).run())
-    at.sidebar.slider[0].set_value(0.0).run()  # α = 0：暴露风险不再影响排序
+    at.sidebar.slider[0].set_value(0.0).run()  # α = 0: exposure risk no longer affects the ranking
     assert not at.exception
     df = at.dataframe[0].value
     assert df.loc[df["告警"] == "MOCK-004", "Priority"].item() == pytest.approx(1.0)
 
 
 def test_list_columns_tie_rule_and_hidden_zero_weight_subsystems():
-    """告警列表：S 前面有"分数 / 阈值"一列（倍数）；表格下方写明并列时的排序规则；不显示权重为 0% 的子系统。"""
+    """Alert list: a "score / threshold" (multiple) column before S; the tie-breaking rule stated below the table; subsystems with 0% weight are hidden."""
     fcfg = yaml.safe_load((ROOT / "config" / "config.yaml").read_text(encoding="utf-8"))["fusion"]
     alerts = {a["alert_id"]: a for a in json.loads((ROOT / fcfg["alerts_json"]).read_text(encoding="utf-8"))}
     at = AppTest.from_file(APP, default_timeout=120).run()
@@ -67,16 +67,16 @@ def test_list_columns_tie_rule_and_hidden_zero_weight_subsystems():
 
 
 def test_path_risk_text_when_no_upstream_asset_is_scanned():
-    """上游资产全部未扫描（mock 中只涉及 P3 的那条）：写"未评估"，不写"可能低估"；部分未扫描的仍写"可能低估"。"""
+    """All upstream assets unscanned (the mock alert involving only P3): shows "未评估" (not assessed), not "可能低估" (may be underestimated); partially unscanned still shows "可能低估"."""
     at = use_mock(AppTest.from_file(APP, default_timeout=120).run())
     df = at.dataframe[0].value.set_index("告警")
     assert df.loc["MOCK-003", "路径风险"] == "未评估：上游资产均未扫描" and df.loc["MOCK-003", "E_sub"] == 0
     assert df.loc["MOCK-004", "路径风险"] == "可能低估"
-    assert len(at.dataframe) == 2 and len(at.table) == 1     # 子系统表用 st.table：长单元格自动换行，不截断
+    assert len(at.dataframe) == 2 and len(at.table) == 1     # The subsystem table uses st.table: long cells wrap instead of being truncated
     sub = at.table[0].value
     assert sub.index.name == "子系统" and sub.loc["P3", "未评估上游"] == "ews_02、historian、hmi_main、plc_p3"
     assert sub.loc["P3", "E_sub"] == "0.000（未评估：上游资产均未扫描）"
-    assert sub.loc["P4", "E_sub"] == "0.000（无控制链：HIL 仿真）" and sub.loc["P4", "未评估上游"] == "-"   # P4 没有资产，不是"未评估"
+    assert sub.loc["P4", "E_sub"] == "0.000（无控制链：HIL 仿真）" and sub.loc["P4", "未评估上游"] == "-"   # P4 has no assets; it is not "未评估" (not assessed)
     assert sub.loc["P4", "名称"] == "HIL 仿真"
 
 
