@@ -1,56 +1,56 @@
-# 扩展部分关键数字
+# Extension key numbers
 
-> 免责声明：资产映射与漏洞数据来自实验环境，仅用于演示
+> Disclaimer: Asset mapping and vulnerability data come from a lab environment and are for demonstration only.
 
-## 漏洞采集（OpenVAS）
+## Vulnerability collection (OpenVAS)
 
-- 报告 1 份，主机 192.168.56.11
-- 结果 630 条，丢弃 Log 90 条，去重 0 条，写入 540 条
-- Critical（CVSS ≥ 9.0）101 条
+- 1 reports, hosts 192.168.56.11
+- 630 results, 90 Log dropped, 0 duplicates dropped, 540 written
+- Critical (CVSS ≥ 9.0): 101
 
-## 威胁情报
+## Threat intelligence
 
-- KEV 版本 2026.09.29，EPSS 日期 2026-09-29
-- 唯一 CVE 1086 个，EPSS 无记录 5 个，无 CVE 的漏洞 47 条
-- 命中 KEV 9 条（8 个 CVE）
-- EPSS 分布（按漏洞取 CVE 最大值）：> 0.0: 493，> 0.01: 448，> 0.1: 208，> 0.5: 89，> 0.9: 33
+- KEV version 2026.09.29, EPSS date 2026-09-29
+- 1086 unique CVEs, 5 without an EPSS record, 47 vulnerabilities without CVEs
+- 9 in KEV (8 CVEs)
+- EPSS distribution (per vulnerability, max over its CVEs): > 0.0: 493, > 0.01: 448, > 0.1: 208, > 0.5: 89, > 0.9: 33
 
-## QoD 过滤
+## QoD filtering
 
-- min_qod = 70：保留 66 / 540 条（丢弃 88%），其中命中 KEV 2 条；需人工核实 7 条
+- min_qod = 70: kept 66 / 540 (88% dropped), of which 2 in KEV; 7 need manual verification
 
-| QoD | 条数 | 是否保留 |
+| QoD | Count | Kept |
 |---|---|---|
-| 30 | 472 | 否 |
-| 50 | 2 | 否 |
-| 70 | 8 | 是 |
-| 80 | 31 | 是 |
-| 95 | 4 | 是 |
-| 98 | 5 | 是 |
-| 99 | 18 | 是 |
+| 30 | 472 | no |
+| 50 | 2 | no |
+| 70 | 8 | yes |
+| 80 | 31 | yes |
+| 95 | 4 | yes |
+| 98 | 5 | yes |
+| 99 | 18 | yes |
 
-## 资产风险与子系统暴露风险
+## Asset risk and subsystem exposure risk
 
-参数 α=1.0，β=1.0，γ=1.5
+Parameters α=1.0, β=1.0, γ=1.5
 
-| 资产 | R_asset | 状态 | 参与计算漏洞数 | 需核实 |
+| Asset | R_asset | Status | Vulns used | Needs review |
 |---|---|---|---|---|
 | ews_01 | 1.000 | scanned | 66 | 7 |
-| ews_02 | 未评估 | not_scanned | 0 | 0 |
-| hmi_main | 未评估 | not_scanned | 0 | 0 |
-| historian | 未评估 | not_scanned | 0 | 0 |
-| plc_p1 | 未评估 | not_scanned | 0 | 0 |
-| plc_p2 | 未评估 | not_scanned | 0 | 0 |
-| plc_p3 | 未评估 | not_scanned | 0 | 0 |
+| ews_02 | Not assessed | not_scanned | 0 | 0 |
+| hmi_main | Not assessed | not_scanned | 0 | 0 |
+| historian | Not assessed | not_scanned | 0 | 0 |
+| plc_p1 | Not assessed | not_scanned | 0 | 0 |
+| plc_p2 | Not assessed | not_scanned | 0 | 0 |
+| plc_p3 | Not assessed | not_scanned | 0 | 0 |
 
-| 子系统 | E_sub | 来源资产 | 未评估的上游资产 |
+| Subsystem | E_sub | Source asset | Unassessed upstream assets |
 |---|---|---|---|
-| P1 | 1.000 | ews_01 | historian、hmi_main、plc_p1 |
-| P2 | 1.000 | ews_01 | historian、hmi_main、plc_p2 |
-| P3 | 未评估（按 0） | - | ews_02、historian、hmi_main、plc_p3 |
-| P4 | 0（无关联资产） | - | - |
+| P1 | 1.000 | ews_01 | historian, hmi_main, plc_p1 |
+| P2 | 1.000 | ews_01 | historian, hmi_main, plc_p2 |
+| P3 | not assessed (counted as 0) | - | ews_02, historian, hmi_main, plc_p3 |
+| P4 | 0 (no associated assets) | - | - |
 
-## 风险饱和
+## Risk saturation
 
-- 参与计算的 66 条漏洞中，18 条 r_v 截断到 1.0；R_asset 与 E_sub 因此封顶，只有一台靶机被评估，E_sub 只能取 0 或 1。
-- 这是 min(1, ·) 公式与单靶机共同导致的，作为局限性写入报告（E3 第二台靶机已跳过）。
+- Of the 66 vulnerabilities used, 18 have r_v clipped to 1.0; R_asset and E_sub are therefore capped, and with only one target assessed, E_sub can only be 0 or 1.
+- This is caused jointly by the min(1, ·) formula and the single target, and is written into the report as a limitation (the second target of E3 was skipped).

@@ -103,7 +103,7 @@ class TorchWindowModel:
     def fit(self, train_ds: WindowDataset, val_es_ds: WindowDataset) -> dict:
         tc, seed = self.train_cfg, self.cfg["ml"]["seed"]
         if tc["optimizer"] != "adam":
-            raise ValueError("只实现了 Adam（ml.train.optimizer = adam）")
+            raise ValueError("only Adam is implemented (ml.train.optimizer = adam)")
         ckpt_dir = self.directory / CKPT_DIR
         ckpt_dir.mkdir(parents=True, exist_ok=True)
         last_path, best_path, log_path = ckpt_dir / "last.pt", ckpt_dir / "best.pt", self.directory / TRAIN_LOG
@@ -122,7 +122,7 @@ class TorchWindowModel:
                 torch.cuda.set_rng_state_all(ckpt["cuda_rng"])
             state = ckpt["state"]
             self.extra = state.get("extra", {})
-            self.log.info("从 checkpoint 续训：已完成 %d 个 epoch，最好的验证损失 %.6g（第 %d 个 epoch）",
+            self.log.info("resuming from checkpoint: %d epochs done, best validation loss %.6g (epoch %d)",
                           state["epoch"], state["best_val"], state["best_epoch"])
         else:
             self.on_fit_start(train_ds)
@@ -149,7 +149,7 @@ class TorchWindowModel:
                 n += len(x)
             train_loss, t1 = total / n, time.time()
             if not np.isfinite(train_loss):
-                raise RuntimeError(f"第 {epoch} 个 epoch 的训练损失不是有限值（{train_loss}）")
+                raise RuntimeError(f"training loss of epoch {epoch} is not finite ({train_loss})")
             val_loss, val_parts = self._mean_loss(val_es_ds, tc["eval_batch_size"])
             t2 = time.time()
 
@@ -176,7 +176,7 @@ class TorchWindowModel:
                 writer = csv.DictWriter(f, fieldnames=list(state["history"][0]))
                 writer.writeheader()
                 writer.writerows(state["history"])
-            self.log.info("epoch %d/%d  train %.6g  val_es %.6g%s  训练 %.1f 秒  验证 %.1f 秒", epoch, tc["max_epochs"],
+            self.log.info("epoch %d/%d  train %.6g  val_es %.6g%s  training %.1f s  validation %.1f s", epoch, tc["max_epochs"],
                           train_loss, val_loss, "  *" if is_best else "", t1 - t0, t2 - t1)
             if self.manifest is not None:
                 self.manifest.update(final_epoch=epoch, early_stop_epoch=epoch if state["stopped_early"] else None,

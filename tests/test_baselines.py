@@ -207,7 +207,7 @@ def test_main_report_rejects_unofficial_runs(env, tmp_path, capsys):
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     out = tmp_path / "report"
 
-    for change, reason in (({"git_dirty": True, "smoke": False}, "git_dirty"), ({"git_dirty": False, "smoke": True}, "冒烟"),
+    for change, reason in (({"git_dirty": True, "smoke": False}, "git_dirty"), ({"git_dirty": False, "smoke": True}, "smoke"),
                            ({"git_dirty": False, "smoke": False, "status": "failed"}, "status")):
         manifest_path.write_text(json.dumps({**manifest, **change}), encoding="utf-8")
         assert make_main_report.main(["--models", "pca", "--output-dir", str(out)]) == 0
@@ -252,7 +252,7 @@ def test_full_run_ignores_smoke_clips(env):
 
 def test_local_diagnostic_run_never_reads_test_and_is_rejected_by_report(env, tmp_path, capsys, monkeypatch):
     import src.data.preprocess as preprocess
-    monkeypatch.setattr(preprocess, "load_test_segments", lambda *a, **k: pytest.fail("本地诊断不得读取 test"))
+    monkeypatch.setattr(preprocess, "load_test_segments", lambda *a, **k: pytest.fail("a local diagnostic run must not read test"))
     assert run_model.main(["--model", "pca", "--local-diagnostic", *OVERRIDES]) == 0
     d = env / "local_diagnostic" / "pca"
     manifest = json.loads((d / "run_manifest.json").read_text(encoding="utf-8"))

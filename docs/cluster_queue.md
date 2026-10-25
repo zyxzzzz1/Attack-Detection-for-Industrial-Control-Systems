@@ -131,7 +131,7 @@ scripts/pull_artifacts.sh
 .venv/bin/python -m src.pipeline --offline
 # 9. I1：按固定规则挑 3 个案例 → reports/main/cases.md、reports/main/cases/
 .venv/bin/python -m scripts.make_cases
-# 10. R1：把各次运行的小文件脱敏后复制到 reports/main/runs/（入库），再汇总关键数字 → reports/main/key_numbers.md（英文）、key_numbers.zh.md（中文）
+# 10. R1：把各次运行的小文件脱敏后复制到 reports/main/runs/（入库），再汇总关键数字 → reports/main/key_numbers.md
 #     （一条命令完成；PROGRESS.md 顶部的"关键数字"是中文版的副本，改动后要同步）
 .venv/bin/python -m scripts.make_key_numbers
 ```

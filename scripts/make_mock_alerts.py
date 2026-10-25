@@ -21,15 +21,15 @@ THRESHOLD = 0.0845  # Fictitious threshold
 
 # (alert_id, scenario, start, end, max_score / threshold, [(sensor, share)])
 CASES = [
-    ("MOCK-001", "单子系统（P1）", "2020-07-15 10:02:10", "2020-07-15 10:05:39", 1.5,
+    ("MOCK-001", "single subsystem (P1)", "2020-07-15 10:02:10", "2020-07-15 10:05:39", 1.5,
      [("P1_FT03", 0.40), ("P1_LIT01", 0.25), ("P1_FCV03D", 0.15), ("P1_PIT01", 0.12), ("P1_TIT01", 0.08)]),
-    ("MOCK-002", "跨两个子系统（P2 + P1）", "2020-07-15 14:30:00", "2020-07-15 14:36:59", 1.8,
+    ("MOCK-002", "across two subsystems (P2 + P1)", "2020-07-15 14:30:00", "2020-07-15 14:36:59", 1.8,
      [("P2_SIT01", 0.35), ("P2_VT01", 0.20), ("P1_PIT01", 0.20), ("P1_FT01", 0.15), ("P2_CO_rpm", 0.10)]),
-    ("MOCK-003", "刚过阈值（P3）", "2020-07-16 03:11:45", "2020-07-16 03:12:04", 1.02,
+    ("MOCK-003", "just above the threshold (P3)", "2020-07-16 03:11:45", "2020-07-16 03:12:04", 1.02,
      [("P3_LIT01", 0.45), ("P3_LCV01D", 0.30), ("P3_FIT01", 0.15), ("P3_PIT01", 0.10)]),
-    ("MOCK-004", "严重报警（P2，S 截断到 1）", "2020-07-16 09:00:00", "2020-07-16 09:14:59", 3.5,
+    ("MOCK-004", "severe alert (P2, S capped at 1)", "2020-07-16 09:00:00", "2020-07-16 09:14:59", 3.5,
      [("P2_SIT02", 0.50), ("P2_VXT02", 0.20), ("P2_VYT02", 0.15), ("P2_SIT01", 0.10), ("P2_VT01", 0.05)]),
-    ("MOCK-005", "跨子系统且涉及 P4（HIL）", "2020-07-16 17:20:30", "2020-07-16 17:23:29", 1.3,
+    ("MOCK-005", "across subsystems, involving P4 (HIL)", "2020-07-16 17:20:30", "2020-07-16 17:23:29", 1.3,
      [("P4_ST_PT01", 0.40), ("P1_TIT01", 0.25), ("P4_ST_TT01", 0.20), ("P1_PIT01", 0.15)]),
 ]
 
@@ -49,9 +49,9 @@ def build_alerts(sensors: set[str]) -> list[dict]:
     for aid, case, start, end, ratio, topk in CASES:
         unknown = [s for s, _ in topk if s not in sensors]
         if unknown:
-            raise ValueError(f"{aid} 使用了 HAI 中不存在的传感器：{unknown}")
+            raise ValueError(f"{aid} uses sensors that do not exist in HAI: {unknown}")
         if abs(sum(sh for _, sh in topk) - 1) > 1e-9:
-            raise ValueError(f"{aid} 的 share 之和不为 1")
+            raise ValueError(f"the shares of {aid} do not sum to 1")
         alerts.append({
             "alert_id": aid,
             "start": start,
@@ -66,9 +66,9 @@ def build_alerts(sensors: set[str]) -> list[dict]:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="生成 mock alerts.json")
+    p = argparse.ArgumentParser(description="Generate the mock alerts.json")
     p.add_argument("--config", type=Path, default=ROOT / "config" / "config.yaml")
-    p.add_argument("--output", type=Path, help="默认取 config.yaml 的 fusion.mock_alerts_json")
+    p.add_argument("--output", type=Path, help="defaults to fusion.mock_alerts_json in config.yaml")
     args = p.parse_args()
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)["fusion"]
@@ -76,7 +76,7 @@ def main() -> int:
     dst = args.output or ROOT / cfg["mock_alerts_json"]
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(json.dumps(alerts, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[保存] {dst}：{len(alerts)} 条 mock 报警")
+    print(f"[SAVED] {dst}: {len(alerts)} mock alerts")
     return 0
 
 

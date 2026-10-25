@@ -26,7 +26,6 @@ import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from src.utils.paths import DEFAULT_CONFIG, artifact_dir, load_config, resolve  # noqa: E402
-from src.utils.i18n import t  # noqa: E402
 from src.utils.reporting import report_problem as official_problem  # noqa: E402
 
 MAIN_COLUMNS = ["model", "precision", "recall", "f1", "auroc", "event_recall", "delay_median_s", "delay_mean_s",
@@ -52,7 +51,7 @@ def main_table(root: Path, models: list[str], allow_unofficial: bool) -> tuple[p
         run_dir = root / name
         metrics = run_dir / "eval_metrics.json"
         if not metrics.exists():
-            skipped.append(f"{name}: 没有 eval_metrics.json（尚未评估或尚未同步）")
+            skipped.append(f"{name}: no eval_metrics.json (not evaluated or not synced yet)")
             continue
         problem = official_problem(run_dir)
         if problem and not allow_unofficial:
@@ -72,7 +71,7 @@ def seed_table(root: Path, cfg: dict, allow_unofficial: bool) -> tuple[pd.DataFr
         run_dir = root / run_name
         metrics = run_dir / "eval_metrics.json"
         if not metrics.exists():
-            problems.append(f"{run_name}: 没有 eval_metrics.json（尚未运行或尚未同步）")
+            problems.append(f"{run_name}: no eval_metrics.json (not run or not synced yet)")
             continue
         problem = official_problem(run_dir)
         manifest = json.loads((run_dir / "run_manifest.json").read_text(encoding="utf-8")) if not problem else {}
@@ -80,7 +79,7 @@ def seed_table(root: Path, cfg: dict, allow_unofficial: bool) -> tuple[pd.DataFr
             # Apart from the seed, the configuration must be identical to the main model: the main-model run has no overrides, the others only ml.seed
             expected = [] if seed == base_seed else [f"{study['seed_key']}={seed}"]
             if manifest.get("seed") != seed or manifest.get("overrides") != expected:
-                problem = f"种子或覆盖项不符（seed={manifest.get('seed')}，overrides={manifest.get('overrides')}，应为 {expected}）"
+                problem = f"seed or overrides do not match (seed={manifest.get('seed')}, overrides={manifest.get('overrides')}, expected {expected})"
         if problem and not allow_unofficial:
             problems.append(f"{run_name}: {problem}")
             continue
@@ -107,13 +106,13 @@ def fmt(value, digits: int = 4) -> str:
 
 def main_table_md(df: pd.DataFrame, seeds: pd.DataFrame | None = None, seed_model: str | None = None,
                   base_seed: int | None = None) -> str:
-    lines = ["# 主结果表", "",
-             "数字全部来自集群上的完整运行。阈值 = val_thr 分数的 99% 分位数；逐点指标**不使用 point-adjust**，"
-             "因此逐点 F1 偏低是预期结果。", "",
-             "每个测试文件的前 W−1 秒没有分数，不参与任何指标，数量见 n_unscored 列。"
-             "检测延迟只统计检出的事件；误报率 = 不与任何攻击事件重叠的报警段数 ÷ 正常时长（小时，只计已打分且无攻击的秒）。", "",
-             "指标约定：报警规则为分数 > 阈值；没有报警时 precision 记为 —（NaN），此时若评估范围内有攻击，"
-             "recall 与 F1 记 0；AUROC 只依赖分数、与阈值无关，只有评估范围内全是同一类标签时才无法定义。", "",
+    lines = ["# Main results", "",
+             "All numbers come from full runs on the cluster. Threshold = 99% quantile of the val_thr scores; point-wise metrics **do not use point-adjust**, "
+             "so a low point-wise F1 is expected.", "",
+             "The first W−1 seconds of each test file have no score and are excluded from every metric; their number is in the n_unscored column. "
+             "Detection delay counts only detected events; false-alarm rate = alarm segments overlapping no attack event ÷ normal duration (hours, counting only scored seconds without attack).", "",
+             "Metric conventions: alarm rule is score > threshold; with no alarms precision is shown as — (NaN), and if there are attacks within the evaluation range "
+             "recall and F1 are 0; AUROC depends only on the scores, not on the threshold, and is undefined only when all labels within the evaluation range are of one class.", "",
              "| " + " | ".join(MAIN_COLUMNS) + " |", "|" + "---|" * len(MAIN_COLUMNS)]
     for row in df.itertuples(index=False):
         cells = [fmt(v, 6 if c == "threshold" else 1 if c.startswith("delay") else 4)
@@ -125,14 +124,14 @@ def main_table_md(df: pd.DataFrame, seeds: pd.DataFrame | None = None, seed_mode
     if seeds is not None and seed_model in set(df["model"]):
         n = len(seeds)
         main = df[df["model"] == seed_model].iloc[0]
-        lines += ["", "## 随机种子", "",
-                  f"{seed_model} 一行的 {'、'.join(SEED_STAT_COLUMNS)} 是 {n} 个随机种子"
-                  f"（{', '.join(str(s) for s in seeds['seed'])}）的均值 ± 样本标准差（ddof=1）；"
-                  f"该行其余各列来自种子 {base_seed} 的主模型运行（这次运行的 "
-                  + "、".join(f"{c} {main[c]:.4f}" for c in SEED_STAT_COLUMNS)
-                  + "），报警导出、归因和图也只用这一次运行。"
-                  "各种子的运行除种子外配置完全相同，阈值各自按自己的 val_thr 99% 分位数计算。"
-                  "**其余模型都只有单个种子的结果**，它们的随机波动没有评估。", "",
+        lines += ["", "## Random seeds", "",
+                  f"In the {seed_model} row, {', '.join(SEED_STAT_COLUMNS)} are the mean ± sample std (ddof=1) over {n} random seeds"
+                  f" ({', '.join(str(s) for s in seeds['seed'])}); "
+                  f"the other columns of that row come from the main-model run with seed {base_seed} (that run's "
+                  + ", ".join(f"{c} {main[c]:.4f}" for c in SEED_STAT_COLUMNS)
+                  + "); alert export, attribution and figures also use only that run. "
+                  "The seed runs have identical configurations apart from the seed, and each threshold is the 99% quantile of its own val_thr. "
+                  "**All other models have results for a single seed only**; their random variation was not assessed.", "",
                   "| " + " | ".join(SEED_COLUMNS) + " |", "|" + "---|" * len(SEED_COLUMNS)]
         for r in seed_summary(seeds).itertuples(index=False):
             cells = [str(r.seed), r.run_name] + [
@@ -153,11 +152,11 @@ def plot_contrib(df: pd.DataFrame, limit: float, path: Path, top_n: int = 20) ->
         ax.text(100 * row.share, y, f" {100 * row.share:.1f}%", va="center", ha="left", fontsize=8, color=INK)
     ax.set_yticks(range(len(top)), top["sensor"], fontsize=8)
     ax.axvline(100 * limit, color=INK2, linestyle="--", linewidth=1)
-    ax.text(100 * limit, len(top) - 0.3, " " + t("上限 {pct}%").format(pct=f"{100 * limit:.0f}"), color=INK2, fontsize=9, va="bottom")
+    ax.text(100 * limit, len(top) - 0.3, " " + "limit {pct}%".format(pct=f"{100 * limit:.0f}"), color=INK2, fontsize=9, va="bottom")
     ax.set_xlim(0, max(100 * limit, 100 * df["share"].max()) * 1.15)
     ax.set_ylim(-0.6, len(top) + 0.4)
-    ax.set_xlabel(t("占 val_thr 重构 MSE 的比例（%）"))
-    ax.set_title(t("PCA 在 val_thr 上各传感器的误差占比（前 {top} 个，共 {n} 个）").format(top=len(top), n=len(df)),
+    ax.set_xlabel("Share of the reconstruction MSE on val_thr (%)")
+    ax.set_title("PCA: error share of each sensor on val_thr (top {top} of {n})".format(top=len(top), n=len(df)),
                  loc="left", fontsize=12)
     ax.spines[["top", "right", "left"]].set_visible(False)
     ax.xaxis.grid(True, color=GRID, linewidth=0.6)
@@ -169,47 +168,47 @@ def plot_contrib(df: pd.DataFrame, limit: float, path: Path, top_n: int = 20) ->
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="生成主线报告素材（主结果表、val_thr 传感器占比）")
+    p = argparse.ArgumentParser(description="Generate the main-line report material (main results table, val_thr sensor shares)")
     p.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
-    p.add_argument("--models", nargs="+", help="写入主表的模型，默认为 config 的 ml.models 中全部模型")
-    p.add_argument("--output-dir", type=Path, help="默认为 config 的 ml.report_dir")
-    p.add_argument("--allow-unofficial", action="store_true", help="接受冒烟或 dirty 的运行（只用于测试，需同时给 --output-dir）")
+    p.add_argument("--models", nargs="+", help="models written to the main table, defaults to all models in ml.models of the config")
+    p.add_argument("--output-dir", type=Path, help="defaults to ml.report_dir in the config")
+    p.add_argument("--allow-unofficial", action="store_true", help="accept smoke or dirty runs (tests only; requires --output-dir)")
     args = p.parse_args(argv)
 
     cfg = load_config(args.config)
     report_dir = resolve(cfg["ml"]["report_dir"])
     out = (args.output_dir or report_dir).resolve()
     if args.allow_unofficial and out == report_dir.resolve():
-        p.error("--allow-unofficial 不能写进正式的报告目录，请用 --output-dir 指向别处")
+        p.error("--allow-unofficial cannot write to the official report directory; point --output-dir elsewhere")
     out.mkdir(parents=True, exist_ok=True)
     root = artifact_dir(cfg)
 
     df, skipped = main_table(root, args.models or list(cfg["ml"]["models"]), args.allow_unofficial)
     for s in skipped:
-        print(f"[跳过] {s}")
+        print(f"[SKIPPED] {s}")
     study = cfg["ml"]["seed_study"]
     seeds, seed_problems = seed_table(root, cfg, args.allow_unofficial)
     if seeds is None:
-        print(f"[提示] 多随机种子（{study['model']}）还不完整，主表维持单种子：")
+        print(f"[INFO] multi-seed study ({study['model']}) is incomplete, the main table stays single-seed:")
         for s in seed_problems:
-            print(f"  [跳过] {s}")
+            print(f"  [SKIPPED] {s}")
     if len(df):
         df.to_csv(out / "main_results.csv", index=False)
         (out / "main_results.md").write_text(main_table_md(df, seeds, study["model"], cfg["ml"]["seed"]), encoding="utf-8")
-        print(f"[生成] main_results.csv / .md（{len(df)} 行：{', '.join(df['model'])}）")
+        print(f"[GENERATED] main_results.csv / .md ({len(df)} rows: {', '.join(df['model'])})")
         if seeds is not None and study["model"] in set(df["model"]):
             seed_summary(seeds).to_csv(out / "main_results_seeds.csv", index=False)
-            print(f"[生成] main_results_seeds.csv（{len(seeds)} 个种子）；{study['model']}："
-                  + "，".join(f"{c} {seeds[c].mean():.4f} ± {seeds[c].std(ddof=1):.4f}" for c in SEED_STAT_COLUMNS))
+            print(f"[GENERATED] main_results_seeds.csv ({len(seeds)} seeds); {study['model']}: "
+                  + ", ".join(f"{c} {seeds[c].mean():.4f} ± {seeds[c].std(ddof=1):.4f}" for c in SEED_STAT_COLUMNS))
     else:
-        print("[提示] 没有可用于主表的运行，未写 main_results")
+        print("[INFO] no runs available for the main table, main_results not written")
 
     contrib = root / DIAGNOSIS_MODEL / CONTRIB_FILE
     problem = official_problem(root / DIAGNOSIS_MODEL, ("completed", "stopped_for_review"))
     if not contrib.exists():
-        print(f"[跳过] 诊断：{DIAGNOSIS_MODEL} 的运行目录里没有 {CONTRIB_FILE}")
+        print(f"[SKIPPED] diagnosis: the run directory of {DIAGNOSIS_MODEL} has no {CONTRIB_FILE}")
     elif problem and not args.allow_unofficial:
-        print(f"[跳过] 诊断：{problem}")
+        print(f"[SKIPPED] diagnosis: {problem}")
     else:
         cdf = pd.read_csv(contrib)
         limit = cfg["ml"]["diagnosis"]["max_sensor_share"]
@@ -221,10 +220,10 @@ def main(argv: list[str] | None = None) -> int:
             both = cdf.merge(pd.read_csv(local), on="sensor", suffixes=("", "_local"))
             diff = (both["share"] - both["share_local"]).abs().max()
             same = len(both) == len(cdf) and diff < LOCAL_DIAGNOSTIC_TOLERANCE
-            print(f"[{'一致' if same else '不一致'}] 与本地诊断运行比较：占比最大相差 {100 * diff:.3f} 个百分点"
-                  f"{'' if same else '（需要汇报）'}")
-        print(f"[生成] {CONTRIB_FILE} / .png；占比最大：{top['sensor']} {100 * top['share']:.1f}%"
-              f"（上限 {100 * limit:.0f}%，{'超限' if top['share'] > limit else '未超限'}）")
+            print(f"[{'MATCH' if same else 'MISMATCH'}] compared with the local diagnostic run: largest share difference {100 * diff:.3f} percentage points"
+                  f"{'' if same else ' (must be reported)'}")
+        print(f"[GENERATED] {CONTRIB_FILE} / .png; largest share: {top['sensor']} {100 * top['share']:.1f}%"
+              f" (limit {100 * limit:.0f}%, {'over the limit' if top['share'] > limit else 'within the limit'})")
     return 0
 
 

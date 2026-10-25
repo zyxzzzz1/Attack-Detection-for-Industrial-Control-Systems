@@ -121,9 +121,9 @@ def test_git_blob_sha_and_check(tmp_path):
     expected = hashlib.sha1(b"blob 6\0hello\n").hexdigest()
     assert git_blob_sha(p) == expected
     assert check(p, 6, expected) is None
-    assert "大小" in check(p, 7, expected)
-    assert check(p, 6, "0" * 40) == "sha 不一致"
-    assert check(tmp_path / "missing", 1, expected) == "文件不存在"
+    assert "size" in check(p, 7, expected)
+    assert check(p, 6, "0" * 40) == "sha mismatch"
+    assert check(tmp_path / "missing", 1, expected) == "file does not exist"
 
 
 def test_data_and_artifact_dirs_env_override(monkeypatch, tmp_path):
@@ -143,5 +143,5 @@ def test_no_absolute_paths_in_tracked_code():
              if p.suffix in (".py", ".yaml", ".sh", ".sbatch", ".j2") and "__pycache__" not in p.parts]
     assert len(files) > 20
     bad = [str(p.relative_to(ROOT)) for p in files
-           if "/home/" in p.read_text(encoding="utf-8") or "桌面" in p.read_text(encoding="utf-8")]
+           if "/home/" in p.read_text(encoding="utf-8") or "\u684c\u9762" in p.read_text(encoding="utf-8")]
     assert bad == []

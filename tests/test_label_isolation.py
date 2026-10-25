@@ -17,9 +17,9 @@ def violations(root=ROOT) -> list[str]:
             continue
         text = path.read_text(encoding="utf-8")
         if "attack" in text.lower():
-            bad.append(f'{rel}: 出现字符串 "attack"')
+            bad.append(f'{rel}: contains the string "attack"')
         if LABEL_MODULE_RE.search(text):
-            bad.append(f"{rel}: 引用了标签模块")
+            bad.append(f"{rel}: references the label module")
     return bad
 
 

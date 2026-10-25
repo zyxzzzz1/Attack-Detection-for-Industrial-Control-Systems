@@ -20,8 +20,8 @@ PREFIX_RE = re.compile(r"^(P\d+)_")
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="检查 HAI CSV 列名")
-    p.add_argument("csv", type=Path, help="HAI train 文件（.csv 或 .csv.gz）")
+    p = argparse.ArgumentParser(description="Inspect the column names of a HAI CSV")
+    p.add_argument("csv", type=Path, help="HAI train file (.csv or .csv.gz)")
     p.add_argument("--output", type=Path, default=Path("data/samples/hai_columns.txt"))
     args = p.parse_args()
 
@@ -40,9 +40,9 @@ def main() -> None:
                 label_values[header[i]][row[i]] += 1
 
     by_sub = defaultdict(list)
-    lines = [f"# 来源：{args.csv.name}（HAI 21.03 官方仓库 https://github.com/icsdataset/hai）",
-             f"# 行数 {n_rows}，时间 {first_time} ~ {last_time}，列数 {len(header)}",
-             "# 标注：[time] 时间列，[label] 标签列（不作为特征），[P?] 传感器所属子系统", ""]
+    lines = [f"# Source: {args.csv.name} (official HAI 21.03 repository https://github.com/icsdataset/hai)",
+             f"# Rows {n_rows}, time {first_time} ~ {last_time}, columns {len(header)}",
+             "# Marks: [time] time column, [label] label column (not a feature), [P?] subsystem of the sensor", ""]
     for i, h in enumerate(header):
         if i == 0:
             tag = "time"
@@ -54,16 +54,16 @@ def main() -> None:
             by_sub[tag].append(h)
         lines.append(f"{i:3d}  [{tag}]  {h}")
 
-    lines += ["", "# 子系统传感器数"]
+    lines += ["", "# Sensors per subsystem"]
     lines += [f"#   {k}: {len(v)}" for k, v in sorted(by_sub.items())]
-    lines += ["", "# 标签列取值统计"]
+    lines += ["", "# Label column value counts"]
     lines += [f"#   {k}: {dict(sorted(v.items()))}" for k, v in label_values.items()]
 
     text = "\n".join(lines) + "\n"
     print(text)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(text, encoding="utf-8")
-    print(f"[保存] {args.output}")
+    print(f"[SAVED] {args.output}")
 
 
 if __name__ == "__main__":

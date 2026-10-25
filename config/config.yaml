@@ -55,11 +55,6 @@ fusion:
   # enriched_alerts.json still contains all alerts. 0 or null means no limit
   max_rendered_alerts: 50
 
-ui:
-  # Display language of the UI and report material: en / zh. Affects display text only (Streamlit, alert cards, index page, cases, chart titles and axes),
-  # never any computation, field name or number. The environment variable UI_LANG overrides it temporarily. English translations are in config/i18n_en.yaml.
-  lang: en
-
 report:
   # E6 report material (based on real data, tracked)
   extension_dir: reports/extension

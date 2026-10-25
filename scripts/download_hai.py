@@ -35,11 +35,11 @@ def git_blob_sha(path: Path) -> str:
 def check(path: Path, size: int, sha: str) -> str | None:
     """Return the reason for a mismatch; None if everything matches."""
     if not path.exists():
-        return "文件不存在"
+        return "file does not exist"
     if path.stat().st_size != size:
-        return f"大小不一致（本地 {path.stat().st_size}，期望 {size}）"
+        return f"size mismatch (local {path.stat().st_size}, expected {size})"
     if git_blob_sha(path) != sha:
-        return "sha 不一致"
+        return "sha mismatch"
     return None
 
 
@@ -54,11 +54,11 @@ def download(url: str, path: Path, timeout_s: int) -> None:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="下载并核对 HAI 数据集")
+    p = argparse.ArgumentParser(description="Download and verify the HAI dataset")
     p.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
-    p.add_argument("--verify-only", action="store_true", help="只核对，不下载")
-    p.add_argument("--offline", action="store_true", help="不联网，按已有的 download_manifest.json 核对（隐含 --verify-only）")
-    p.add_argument("--retries", type=int, default=3, help="单个文件核对失败后的最大重下次数")
+    p.add_argument("--verify-only", action="store_true", help="only verify, do not download")
+    p.add_argument("--offline", action="store_true", help="no network: verify against the existing download_manifest.json (implies --verify-only)")
+    p.add_argument("--retries", type=int, default=3, help="maximum re-downloads per file after a failed verification")
     p.add_argument("--timeout", type=int, default=60)
     args = p.parse_args()
 
@@ -72,7 +72,7 @@ def main() -> int:
     if args.offline:
         args.verify_only = True
         if not manifest_path.exists():
-            print(f"[错误] 离线核对需要 {manifest_path}（随数据一起从本地同步）", file=sys.stderr)
+            print(f"[ERROR] offline verification needs {manifest_path} (sync it from local together with the data)", file=sys.stderr)
             return 2
         old = json.loads(manifest_path.read_text(encoding="utf-8"))
         remote = {f["name"]: {"size": f["size"], "sha": f["git_blob_sha"]} for f in old["files"]}
@@ -82,7 +82,7 @@ def main() -> int:
         remote = {e["name"]: e for e in resp.json()}
     missing = [n for n in wanted if n not in remote]
     if missing:
-        print(f"[错误] 官方仓库中找不到：{missing}", file=sys.stderr)
+        print(f"[ERROR] not found in the official repository: {missing}", file=sys.stderr)
         return 2
 
     records, failed = [], []
@@ -93,10 +93,10 @@ def main() -> int:
         attempts = 0
         while reason and not args.verify_only and attempts < args.retries:
             attempts += 1
-            print(f"[下载] {name}（{reason}，第 {attempts} 次）")
+            print(f"[DOWNLOAD] {name} ({reason}, attempt {attempts})")
             download(f"{hai['raw_url']}/{name}", path, args.timeout)
             reason = check(path, size, sha)
-        print(f"[{'失败' if reason else '一致'}] {name}  {size} 字节  {reason or sha}")
+        print(f"[{'FAIL' if reason else 'OK'}] {name}  {size} bytes  {reason or sha}")
         if reason:
             failed.append(name)
         records.append({"name": name, "size": size, "git_blob_sha": sha, "verified": reason is None})
@@ -107,7 +107,7 @@ def main() -> int:
                 "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "total_bytes": sum(r["size"] for r in records), "files": records}
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"[保存] {manifest_path}")
+    print(f"[SAVED] {manifest_path}")
     return 1 if failed else 0
 
 

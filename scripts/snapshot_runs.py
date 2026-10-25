@@ -94,7 +94,7 @@ def snapshot(cfg: dict) -> tuple[list[str], list[str]]:
     copied, skipped = [], []
     for name in run_names(cfg):
         src = root / name
-        problem = report_problem(src) if src.exists() else "运行目录不存在（尚未运行或尚未同步）"
+        problem = report_problem(src) if src.exists() else "run directory does not exist (not run or not synced yet)"
         if problem:
             skipped.append(f"{name}: {problem}")
             continue
@@ -109,14 +109,14 @@ def snapshot(cfg: dict) -> tuple[list[str], list[str]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="把各次运行的小文件脱敏后复制到 reports/main/runs/")
+    p = argparse.ArgumentParser(description="Copy the small files of each run, redacted, to reports/main/runs/")
     p.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     args = p.parse_args(argv)
     cfg = load_config(args.config)
     copied, skipped = snapshot(cfg)
     for s in skipped:
-        print(f"[跳过] {s}")
-    print(f"[复制] {len(copied)} 次运行（已脱敏）→ {resolve(cfg['ml']['report_dir']) / SNAPSHOT_SUBDIR}")
+        print(f"[SKIPPED] {s}")
+    print(f"[COPIED] {len(copied)} runs (redacted) → {resolve(cfg['ml']['report_dir']) / SNAPSHOT_SUBDIR}")
     return 0
 
 

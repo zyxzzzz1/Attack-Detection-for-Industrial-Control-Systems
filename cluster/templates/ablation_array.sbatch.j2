@@ -47,6 +47,6 @@ if [[ "${SMOKE}" == "1" ]]; then
     INDEX="${1:-0}"
     [[ $# -gt 0 ]] && shift
 else
-    INDEX="${SLURM_ARRAY_TASK_ID:?需要作为 job array 提交}"
+    INDEX="${SLURM_ARRAY_TASK_ID:?must be submitted as a job array}"
 fi
 python -m src.run_model --ablation-index "${INDEX}" --resume "${SMOKE_ARGS[@]}" "$@"

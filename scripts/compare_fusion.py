@@ -15,27 +15,28 @@ from pathlib import Path
 
 import yaml
 
+from src.utils.disclaimer import DISCLAIMER
+
 ROOT = Path(__file__).resolve().parents[1]
-DISCLAIMER = "资产映射与漏洞数据来自实验环境，仅用于演示"
 
 
 def _fmt(x) -> str:
-    return "未评估" if x is None else f"{x:.3f}"
+    return "Not assessed" if x is None else f"{x:.3f}"
 
 
 def _delta(a, b) -> str:
     if a is None or b is None:
-        return "-" if a == b else "新评估" if a is None else "不再评估"
+        return "-" if a == b else "newly assessed" if a is None else "no longer assessed"
     d = b - a
     return "0" if abs(d) < 5e-4 else f"{d:+.3f}"
 
 
 def compare(before: dict, after: dict) -> str:
-    lines = ["# 融合打分对比（加入第二台靶机前后）", "",
-             f"> 免责声明：{DISCLAIMER}"]
+    lines = ["# Fusion scoring comparison (before and after adding the second target)", "",
+             f"> Disclaimer: {DISCLAIMER}"]
     if before.get("is_mock") or after.get("is_mock"):
-        lines.append("> [MOCK] 告警排序基于 mock 报警；R_asset / E_sub 基于真实扫描数据。")
-    lines += ["", "## 资产风险 R_asset", "", "| 资产 | 之前 | 之后 | 变化 | 状态（之前 → 之后） |", "|---|---|---|---|---|"]
+        lines.append("> [MOCK] The alert ranking is based on mock alerts; R_asset / E_sub are based on real scan data.")
+    lines += ["", "## Asset risk R_asset", "", "| Asset | Before | After | Change | Status (before → after) |", "|---|---|---|---|---|"]
     ab, aa = before["asset_risk"], after["asset_risk"]
     for aid in sorted(set(ab) | set(aa)):
         b, a = ab.get(aid, {}), aa.get(aid, {})
@@ -43,13 +44,13 @@ def compare(before: dict, after: dict) -> str:
         lines.append(f"| {aid} | {_fmt(rb)} | {_fmt(ra)} | {_delta(rb, ra)} | "
                      f"{b.get('status', '-')} → {a.get('status', '-')} |")
 
-    lines += ["", "## 子系统暴露风险 E_sub", "", "| 子系统 | 之前 | 之后 | 变化 | 来源资产（之后） |", "|---|---|---|---|---|"]
+    lines += ["", "## Subsystem exposure risk E_sub", "", "| Subsystem | Before | After | Change | Source asset (after) |", "|---|---|---|---|---|"]
     sb, sa = before["subsystem_risk"], after["subsystem_risk"]
     for sid in sorted(set(sb) | set(sa)):
         eb, ea = sb.get(sid, {}).get("E_sub", 0.0), sa.get(sid, {}).get("E_sub", 0.0)
         lines.append(f"| {sid} | {eb:.3f} | {ea:.3f} | {_delta(eb, ea)} | {sa.get(sid, {}).get('max_asset') or '-'} |")
 
-    lines += ["", "## 告警排序", "", "| 告警 | 排名 之前 → 之后 | priority 之前 | priority 之后 | 变化 |", "|---|---|---|---|---|"]
+    lines += ["", "## Alert ranking", "", "| Alert | Rank before → after | Priority before | Priority after | Change |", "|---|---|---|---|---|"]
     xb = {a["alert_id"]: a for a in before["alerts"]}
     xa = {a["alert_id"]: a for a in after["alerts"]}
     for aid in sorted(xa, key=lambda k: xa[k]["rank"]):
@@ -59,15 +60,15 @@ def compare(before: dict, after: dict) -> str:
         lines.append(f"| {aid} | {rank_b} → {a['rank']} | {pb:.3f} | {a['priority']:.3f} | {_delta(pb, a['priority'])} |")
     order_b = [a["alert_id"] for a in sorted(before["alerts"], key=lambda a: a["rank"])]
     order_a = [a["alert_id"] for a in sorted(after["alerts"], key=lambda a: a["rank"])]
-    lines += ["", f"排序是否变化：{'是' if order_b != order_a else '否'}", "", "---", DISCLAIMER, ""]
+    lines += ["", f"Ranking changed: {'yes' if order_b != order_a else 'no'}", "", "---", DISCLAIMER, ""]
     return "\n".join(lines)
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="对比两次融合打分结果")
+    p = argparse.ArgumentParser(description="Compare two fusion scoring results")
     p.add_argument("--config", type=Path, default=ROOT / "config" / "config.yaml")
     p.add_argument("--before", type=Path, required=True)
-    p.add_argument("--after", type=Path, help="默认取 config.yaml 的 fusion.enriched_alerts_json")
+    p.add_argument("--after", type=Path, help="defaults to fusion.enriched_alerts_json in config.yaml")
     p.add_argument("--output", type=Path, default=ROOT / "reports" / "extension" / "e3_compare.md")
     args = p.parse_args()
     with open(args.config, encoding="utf-8") as f:
@@ -78,7 +79,7 @@ def main() -> int:
     print(text)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(text, encoding="utf-8")
-    print(f"[保存] {args.output}")
+    print(f"[SAVED] {args.output}")
     return 0
 
 

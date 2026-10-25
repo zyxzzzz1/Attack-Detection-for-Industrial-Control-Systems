@@ -1,6 +1,6 @@
 ## Key numbers (main line)
 
-Quote these when writing the report. The numbers are read from the source files by `python -m scripts.make_key_numbers` (the same run writes the Chinese version, `key_numbers.zh.md`). All detection, ablation and attribution numbers come from full cluster runs (git_dirty=false); no smoke-test number appears here.
+Quote these when writing the report. The numbers are read from the source files by `python -m scripts.make_key_numbers`. All detection, ablation and attribution numbers come from full cluster runs (git_dirty=false); no smoke-test number appears here.
 All source files are tracked: `reports/main/runs/` holds copies of the small files of each cluster run (metrics, manifest, threshold, preprocessing summary, training log), copied from the artifact directory by this script with host names and other cluster details replaced by placeholders.
 
 ### Detection

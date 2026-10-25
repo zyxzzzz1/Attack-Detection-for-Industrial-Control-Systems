@@ -1,103 +1,103 @@
 {% macro esub(s) -%}
-{% if not s.has_assets %}E_sub = {{ s.E_sub | f3 }}{{ _("（无控制链：HIL 仿真）") }}{% elif not s.E_sub_assessed %}{{ _("E_sub 未评估（上游资产均未扫描，按 0 计算）") }}{% else %}E_sub = {{ s.E_sub | f3 }}{% if s.unassessed_assets %}{{ _("（另有 {n} 个上游资产未评估）").format(n=s.unassessed_assets | length) }}{% endif %}{% endif %}
+{% if not s.has_assets %}E_sub = {{ s.E_sub | f3 }} (no control chain: HIL simulation){% elif not s.E_sub_assessed %}E_sub not assessed (no upstream asset has been scanned; counted as 0){% else %}E_sub = {{ s.E_sub | f3 }}{% if s.unassessed_assets %}{{ " ({n} more upstream assets not assessed)".format(n=s.unassessed_assets | length) }}{% endif %}{% endif %}
 {%- endmacro %}
-# {{ _("告警 {id}　优先级第 {rank} / {n}").format(id=a.alert_id, rank=a.rank, n=n_alerts) }}
+# {{ "Alert {id} — priority rank {rank} / {n}".format(id=a.alert_id, rank=a.rank, n=n_alerts) }}
 
 {% if a.is_mock is defined and a.is_mock %}
-> **[MOCK]** {{ _("本告警由 mock 报警生成（{case}），分数与时间为虚构值，不是模型输出。").format(case=(a.mock_case | trd) if a.mock_case is defined else "mock") }}
+> **[MOCK]** {{ "This alert was generated from a mock alert ({case}); scores and times are made-up values, not model output.".format(case=(a.mock_case) if a.mock_case is defined else "mock") }}
 
 {% endif %}
-> {{ _("免责声明：") }}{{ disclaimer }}
+> Disclaimer: {{ disclaimer }}
 
-## {{ _("概要") }}
+## Summary
 
-| {{ _("项目") }} | {{ _("值") }} |
+| Item | Value |
 |---|---|
-| {{ _("优先级 priority") }} | **{{ a.priority | f3 }}**{{ _("（第 {rank} 名）").format(rank=a.rank) }} |
-| {{ _("起止时间") }} | {{ a.start }} ~ {{ a.end }} |
-| {{ _("持续时长") }} | {{ duration }} |
-| {{ _("最大异常分数 / 阈值") }} | {{ "%.4f" | format(a.max_score) }} / {{ "%.4f" | format(a.threshold) }}{{ _("（{ratio} 倍）").format(ratio="%.2f" | format(ratio)) }} |
-| {{ _("异常严重度 S") }} | {{ a.S | f3 }} |
-| {{ _("加权暴露风险 E_sub") }} | {{ a.E_sub | f3 }}{% if exposure(a) == "not_assessed" %}{{ _("（未评估：上游资产均未扫描）") }}{% elif exposure(a) == "partial" %}{{ _("（可能被低估）") }}{% endif %} |
+| Priority | **{{ a.priority | f3 }}**{{ " (rank {rank})".format(rank=a.rank) }} |
+| Start ~ end | {{ a.start }} ~ {{ a.end }} |
+| Duration | {{ duration }} |
+| Max anomaly score / threshold | {{ "%.4f" | format(a.max_score) }} / {{ "%.4f" | format(a.threshold) }}{{ " ({ratio}x)".format(ratio="%.2f" | format(ratio)) }} |
+| Anomaly severity S | {{ a.S | f3 }} |
+| Weighted exposure risk E_sub | {{ a.E_sub | f3 }}{% if exposure(a) == "not_assessed" %} (not assessed: no upstream asset scanned){% elif exposure(a) == "partial" %} (possibly underestimated){% endif %} |
 
-## {{ _("Top-{k} 异常传感器").format(k=a.topk | length) }}
+## {{ "Top-{k} anomalous sensors".format(k=a.topk | length) }}
 
-| {{ _("传感器") }} | {{ _("占全部传感器误差的比例") }} | {{ _("子系统") }} |
+| Sensor | Share of total sensor error | Subsystem |
 |---|---|---|
 {% for t in a.topk %}
-| `{{ t.sensor }}` | {{ t.share | pct }} | {{ t.subsystem or _("未知前缀（不参与加权）") }} |
+| `{{ t.sensor }}` | {{ t.share | pct }} | {{ t.subsystem or "Unknown prefix (excluded from weighting)" }} |
 {% endfor %}
 
-## {{ _("推断受影响的子系统") }}
+## Inferred affected subsystems
 
 {% for s in a.subsystems %}
-- **{{ s.id }} {{ s.name | trd }}**{{ _("：权重 {weight}，业务关键度 {crit}，暴露风险 ").format(weight=s.weight | pct, crit=s.criticality) }}{{ esub(s) }}
+- **{{ s.id }} {{ s.name }}**{{ ": weight {weight}, business criticality {crit}, exposure risk ".format(weight=s.weight | pct, crit=s.criticality) }}{{ esub(s) }}
 {% if s.note %}
-  - {{ _("说明：") }}{{ s.note | trd }}
+  - Note: {{ s.note }}
 {% endif %}
 {% else %}
-- {{ _("无法识别受影响的子系统（Top-k 传感器前缀均不在资产映射中）。") }}
+- The affected subsystem cannot be identified (none of the Top-k sensor prefixes is in the asset map).
 {% endfor %}
 {% if a.unmapped_sensors %}
-- {{ _("未映射的传感器：") }}{% for x in a.unmapped_sensors %}`{{ x }}`{{ _("、") if not loop.last }}{% endfor %}
+- Unmapped sensors: {% for x in a.unmapped_sensors %}`{{ x }}`{{ ", " if not loop.last }}{% endfor %}
 
 {% endif %}
 
-## {{ _("可能的入侵路径") }}
+## Possible intrusion paths
 
 {% if a.risk_underestimated %}
-> **{{ _("注意：") }}{{ _(UNDERESTIMATED) }}**{{ _("（未评估：{assets}）").format(assets=a.unassessed_assets | join(_("、"))) }}
+> **Note: {{ UNDERESTIMATED }}**{{ " (not assessed: {assets})".format(assets=a.unassessed_assets | join(", ")) }}
 
 {% endif %}
 {% for p in a.path %}
-- {{ p.subsystem }}{{ _("：") }}{{ p.path | join(" → ") }}
+- {{ p.subsystem }}: {{ p.path | join(" → ") }}
 {% else %}
-- {{ _("无（受影响子系统没有挂接控制链）。") }}
+- None (the affected subsystems have no control chain attached).
 {% endfor %}
 
-{{ _("路径上的资产：") }}
+Assets on the paths:
 
-| {{ _("资产") }} | {{ _("风险 R_asset") }} | {{ _("状态") }} | {{ _("参与计算漏洞数") }} | {{ _("需核实的 KEV 漏洞") }} |
+| Asset | Risk R_asset | Status | Vulnerabilities counted | KEV vulns needing review |
 |---|---|---|---|---|
 {% for x in a.path_assets %}
-| {{ x.asset }} | {{ x.R_asset | risk }} | {{ _(status_text[x.status]) }} | {{ x.n_vulns }} | {{ x.n_needs_review }} |
+| {{ x.asset }} | {{ x.R_asset | risk }} | {{ status_text[x.status] }} | {{ x.n_vulns }} | {{ x.n_needs_review }} |
 {% else %}
 | - | - | - | - | - |
 {% endfor %}
 
-## {{ _("路径资产的高危漏洞（按 r_v 排序，QoD ≥ {q}）").format(q=meta.params.min_qod) }}
+## {{ "High-risk vulnerabilities on the path assets (sorted by r_v, QoD ≥ {q})".format(q=meta.params.min_qod) }}
 
 {% if a.vulns %}
-| # | {{ _("资产") }} | {{ _("端口") }} | {{ _("漏洞") }} | CVSS | EPSS | KEV | QoD | r_v |
+| # | Asset | Port | Vulnerability | CVSS | EPSS | KEV | QoD | r_v |
 |---|---|---|---|---|---|---|---|---|
 {% for v in a.vulns %}
 | {{ loop.index }} | {{ v.asset }} | {{ v.port }} | {{ v.name | md }} | {{ v.cvss }} | {{ "%.3f" | format(v.epss) }} | {{ ("**KEV** " ~ (v.kev_cves | join(", "))) if v.in_kev else "-" }} | {{ v.qod }} | {{ v.r_v | f3 }} |
 {% endfor %}
 {% else %}
-{{ _("路径资产上没有达到 QoD 阈值的漏洞。") }}
+No vulnerabilities on the path assets reach the QoD threshold.
 {% endif %}
 
 {% if a.needs_review %}
-## {{ _("需人工核实（命中 KEV 但 QoD < {q}，未参与风险计算）").format(q=meta.params.min_qod) }}
+## {{ "Needs manual verification (in KEV but QoD < {q}; not included in the risk calculation)".format(q=meta.params.min_qod) }}
 
-| {{ _("资产") }} | {{ _("端口") }} | {{ _("漏洞") }} | KEV CVE | EPSS | QoD |
+| Asset | Port | Vulnerability | KEV CVE | EPSS | QoD |
 |---|---|---|---|---|---|
 {% for v in a.needs_review %}
 | {{ v.asset }} | {{ v.port }} | {{ v.name | md }} | {{ v.kev_cves | join(", ") }} | {{ "%.3f" | format(v.epss) }} | {{ v.qod }} |
 {% endfor %}
 
 {% endif %}
-## {{ _("建议动作") }}
+## Recommended actions
 
 {% for step in actions.steps %}
 {{ loop.index }}. {{ step }}
 {% endfor %}
 {% if actions.fixes %}
 
-{{ _("OpenVAS 修复建议：") }}
+OpenVAS remediation advice:
 
 {% for v in actions.fixes %}
-- **{{ v.name }}**{{ _("（{asset} {port}）：").format(asset=v.asset, port=v.port) }}{{ v.solution | md }}
+- **{{ v.name }}**{{ " ({asset} {port}): ".format(asset=v.asset, port=v.port) }}{{ v.solution | md }}
 {% endfor %}
 {% endif %}
 

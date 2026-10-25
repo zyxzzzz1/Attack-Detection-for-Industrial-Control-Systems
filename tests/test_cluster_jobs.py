@@ -34,7 +34,7 @@ def sbatch_lines(text):
 
 def test_generated_files_are_up_to_date(cluster):
     for name, text in render_all(cluster, load_config()).items():
-        assert (CLUSTER_DIR / name).read_text(encoding="utf-8") == text, f"{name} 过期：运行 python -m scripts.make_cluster_jobs"
+        assert (CLUSTER_DIR / name).read_text(encoding="utf-8") == text, f"{name} is stale: run python -m scripts.make_cluster_jobs"
 
 
 def test_resources_come_from_cluster_yaml(cluster):
@@ -74,7 +74,7 @@ def test_todo_handling(cluster):
         assert not any("--time" in line for line in sbatch_lines(files["train_one.sbatch"]))
     done = "".join(render_all(filled(cluster), load_config()).values())
     assert "=TODO" not in done and "TODO/" not in done and "not yet set" not in done
-    assert find_todos({"a": {"b": "TODO 稍后", "c": 1}, "d": "ok", "e": ["TODO"]}) == ["a.b"]
+    assert find_todos({"a": {"b": "TODO later", "c": 1}, "d": "ok", "e": ["TODO"]}) == ["a.b"]
 
 
 def test_job_refuses_to_run_outside_slurm_without_smoke(tmp_path, cluster):
@@ -88,14 +88,14 @@ def test_job_refuses_to_run_outside_slurm_without_smoke(tmp_path, cluster):
     (work / "train_one.sbatch").write_text(script, encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if not k.startswith("SLURM")}
     r = subprocess.run(["bash", str(work / "train_one.sbatch"), "pca"], capture_output=True, text=True, env=env)
-    assert r.returncode == 2 and "登录节点" in r.stderr
+    assert r.returncode == 2 and "login node" in r.stderr
 
 
 def test_sync_scripts_fail_fast(cluster, tmp_path):
     """Exit immediately while paths are still TODO; once filled in, an unreachable alias prompts to check the VPN (simulated with a nonexistent alias)."""
     for script in ("push_to_cluster.sh", "pull_artifacts.sh"):
         text = (ROOT / "scripts" / script).read_text(encoding="utf-8")
-        assert "检查 Chalmers VPN" in text and "BatchMode=yes" in text and "CLUSTER_SSH_ALIAS" in text
+        assert "check the Chalmers VPN" in text and "BatchMode=yes" in text and "CLUSTER_SSH_ALIAS" in text
         assert subprocess.run(["bash", "-n", str(ROOT / "scripts" / script)]).returncode == 0
     # Paths are TODO in the tracked config: with only the tracked files (no cluster/local/), the sync scripts exit right away without connecting to the cluster.
     # Run on a copy in a temporary directory; not in the project directory, which may contain a real cluster/local/ and would make the script actually connect to the cluster.
@@ -130,17 +130,17 @@ def test_push_refuses_dirty_worktree_unless_allowed(tmp_path, cluster):
     assert run(*git, "commit", "-qm", "init").returncode == 0
 
     clean = run("bash", str(script))
-    assert clean.returncode == 1 and "检查 Chalmers VPN" in clean.stderr  # Clean: passes the check and gets stuck at connecting
+    assert clean.returncode == 1 and "check the Chalmers VPN" in clean.stderr  # Clean: passes the check and gets stuck at connecting
 
-    (repo / "cluster" / "cluster_env.sh").write_text(env_text + "# 改动\n", encoding="utf-8")
+    (repo / "cluster" / "cluster_env.sh").write_text(env_text + "# changed\n", encoding="utf-8")
     (repo / "new_file.py").write_text("x = 1\n", encoding="utf-8")
     dirty = run("bash", str(script))
-    assert dirty.returncode == 3 and "拒绝推送" in dirty.stderr
+    assert dirty.returncode == 3 and "refusing to push" in dirty.stderr
     assert "cluster/cluster_env.sh" in dirty.stderr and "new_file.py" in dirty.stderr
     assert "VPN" not in dirty.stderr and not (repo / ".git_commit").exists()
 
     allowed = run("bash", str(script), "--allow-dirty")
-    assert allowed.returncode == 1 and "检查 Chalmers VPN" in allowed.stderr
+    assert allowed.returncode == 1 and "check the Chalmers VPN" in allowed.stderr
     # Pushing data is not affected by the worktree state
     assert run("bash", str(script), "--data").returncode == 1
 
@@ -155,7 +155,7 @@ def test_sync_scripts_report_vpn_when_unreachable(tmp_path, cluster):
     script = "pull_artifacts.sh"
     (tmp_path / "scripts" / script).write_text((ROOT / "scripts" / script).read_text(encoding="utf-8"), encoding="utf-8")
     r = subprocess.run(["bash", str(tmp_path / "scripts" / script)], capture_output=True, text=True, timeout=60)
-    assert r.returncode == 1 and "检查 Chalmers VPN" in r.stderr
+    assert r.returncode == 1 and "check the Chalmers VPN" in r.stderr
 
 
 @pytest.mark.parametrize("script,args,expect_dirs", [
@@ -166,7 +166,7 @@ def test_sync_scripts_report_vpn_when_unreachable(tmp_path, cluster):
 def test_job_bodies_run_locally_in_smoke_mode(tmp_path, script, args, expect_dirs):
     """Run the body of a job script locally (--smoke, no scheduler) on synthetic data. Requires .venv in the project root."""
     if not (ROOT / ".venv" / "bin" / "activate").exists():
-        pytest.skip("没有本地 .venv（集群上的环境在别处），跳过本地冒烟")
+        pytest.skip("no local .venv (the cluster environment lives elsewhere), skipping the local smoke run")
     import numpy as np
     import pandas as pd
     cfg = load_config()

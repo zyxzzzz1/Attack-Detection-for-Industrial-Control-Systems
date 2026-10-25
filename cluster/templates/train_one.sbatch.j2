@@ -40,6 +40,6 @@ else
     source "{{ paths.code_dir }}/cluster/job_common.sh"
 fi
 
-MODEL="${1:?用法：train_one.sbatch [--smoke] <模型名> [--set key=value ...]}"
+MODEL="${1:?usage: train_one.sbatch [--smoke] <model> [--set key=value ...]}"
 shift
 python -m src.run_model --model "${MODEL}" --resume "${SMOKE_ARGS[@]}" "$@"

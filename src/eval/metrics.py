@@ -29,7 +29,7 @@ def point_metrics(scores: np.ndarray, labels: np.ndarray, threshold: float) -> d
     """
     scores, labels = np.asarray(scores, dtype=np.float64), np.asarray(labels).astype(bool)
     if scores.shape != labels.shape:
-        raise ValueError(f"scores {scores.shape} 与 labels {labels.shape} 长度不一致")
+        raise ValueError(f"scores {scores.shape} and labels {labels.shape} differ in length")
     scored = ~np.isnan(scores)
     s, y = scores[scored], labels[scored]
     pred = s > threshold
@@ -57,7 +57,7 @@ def event_metrics(files: list[tuple[np.ndarray, np.ndarray]], threshold: float, 
     for k, (scores, labels) in enumerate(files):
         scores, labels = np.asarray(scores, dtype=np.float64), np.asarray(labels).astype(bool)
         if scores.shape != labels.shape:
-            raise ValueError(f"第 {k} 个文件：scores {scores.shape} 与 labels {labels.shape} 长度不一致")
+            raise ValueError(f"file {k}: scores {scores.shape} and labels {labels.shape} differ in length")
         alarm = alarms_from_scores(scores, threshold)
         normal_s += int((~labels & ~np.isnan(scores)).sum())
         file_events = to_segments(labels, 0)

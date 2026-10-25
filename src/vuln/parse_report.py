@@ -21,8 +21,9 @@ from pathlib import Path
 import yaml
 from lxml import etree
 
+from src.utils.disclaimer import DISCLAIMER
+
 ROOT = Path(__file__).resolve().parents[2]
-DISCLAIMER = "资产映射与漏洞数据来自实验环境，仅用于演示"
 
 
 class ReportIntegrityError(Exception):
@@ -34,13 +35,13 @@ def load_report(path: Path) -> etree._Element:
     root = etree.parse(str(path)).getroot()
     report = root.find(".//report/report")
     if report is None:
-        raise ReportIntegrityError(f"{path} 中找不到内层 <report> 节点")
+        raise ReportIntegrityError(f"no inner <report> node in {path}")
     n = len(report.findall("results/result"))
     filtered = (report.findtext("result_count/filtered") or "").strip()
     full = (report.findtext("result_count/full") or "").strip()
     if not (str(n) == filtered == full):
         raise ReportIntegrityError(
-            f"条数不一致：导出 {n} 条，filtered={filtered or '缺失'}，full={full or '缺失'}；报告不完整，请重新导出"
+            f"count mismatch: {n} exported, filtered={filtered or 'missing'}, full={full or 'missing'}; the report is incomplete, export it again"
         )
     return report
 
@@ -125,10 +126,10 @@ def parse_report(path: Path) -> dict:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="OpenVAS XML 报告 → vulns.json")
+    p = argparse.ArgumentParser(description="OpenVAS XML report → vulns.json")
     p.add_argument("--config", type=Path, default=ROOT / "config" / "config.yaml")
-    p.add_argument("--input", type=Path, nargs="+", help="一份或多份报告，默认取 config.yaml 的 vuln.report_xmls")
-    p.add_argument("--output", type=Path, help="默认取 config.yaml 的 vuln.vulns_json")
+    p.add_argument("--input", type=Path, nargs="+", help="one or more reports, defaults to vuln.report_xmls in config.yaml")
+    p.add_argument("--output", type=Path, help="defaults to vuln.vulns_json in config.yaml")
     args = p.parse_args()
 
     with open(args.config, encoding="utf-8") as f:
@@ -139,15 +140,15 @@ def main() -> int:
     try:
         data = parse_reports(srcs)
     except ReportIntegrityError as e:
-        print(f"[失败] {e}", file=sys.stderr)
+        print(f"[FAILED] {e}", file=sys.stderr)
         return 4
 
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     s = data["stats"]
     print(
-        f"[保存] {dst}：共 {s['results_total']} 条结果，丢弃 Log {s['log_dropped']} 条、"
-        f"重复 {s['duplicates_dropped']} 条，写入 {s['vulns']} 条"
+        f"[SAVED] {dst}: {s['results_total']} results, {s['log_dropped']} Log "
+        f"and {s['duplicates_dropped']} duplicates dropped, {s['vulns']} written"
     )
     return 0
 

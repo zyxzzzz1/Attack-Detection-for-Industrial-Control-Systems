@@ -29,10 +29,11 @@
 | I1 | 报警导出与集成 | 完成(2026-10-09:真实 alerts.json、融合排序评估、流水线与 Streamlit 默认读真实报警、3 个案例) | c50dec5 |
 | R1 | 收尾 | 完成(2026-10-09:`reports/main/` 索引与关键数字、README 主线部分、方法草稿的待填项、本文件顶部的关键数字) | e5a6fed |
 | L1 | 界面和报告素材英文化(`ui.lang`:en / zh,默认 en) | 完成(2026-10-09:Streamlit、卡片、索引页、案例、全部图表;数值与中文版一致) | c164de1 |
+| L2 | 代码全部英文化:注释、显示文字、提示语、生成的报告;删除 zh 选项与译文表 | 完成(2026-10-25,见下方 L2 一节) | — |
 
 ## 关键数字（主线）
 
-写报告时直接引用。数字由 `python -m scripts.make_key_numbers` 从来源文件读出（本节是 `reports/main/key_numbers.zh.md` 的副本）；检测、消融、归因的数字全部来自集群上的完整运行（git_dirty=false），冒烟测试的数字没有进入这里。
+写报告时直接引用。数字由 `python -m scripts.make_key_numbers` 从来源文件读出（本节原为 `reports/main/key_numbers.zh.md` 的副本；2026-10-25 起只生成英文版 `key_numbers.md`，本节不再自动同步，数字以英文版为准）；检测、消融、归因的数字全部来自集群上的完整运行（git_dirty=false），冒烟测试的数字没有进入这里。
 来源文件全部入库：`reports/main/runs/` 是各次集群运行的小文件（指标、manifest、阈值、预处理摘要、训练记录）的副本，由本脚本从产物目录复制，主机名等集群信息已替换为占位符。
 
 ### 检测
@@ -126,6 +127,14 @@
   - **没有处理的**:git 提交历史(b28454f 起的提交里仍有用户名和路径,作者邮箱也在历史里;这些提交还没有推送到远端)。
     重写历史会改变所有提交号,而 run_manifest.json 和本文件引用了这些提交号,需要单独决定。集群名称 Minerva / Chalmers 仍出现在文档中。
   - 推送逻辑的这一改动只做了本地测试(生成结果、TODO 时拒绝、dirty 检查),**没有在集群上实际推送过**;下次推送时先用 `--dry-run` 看一遍。
+
+### L2 代码全部英文化(2026-10-25)
+
+- 代码、模板、配置、测试里不再有中文:注释和 docstring、显示文字、终端输出、报错、生成报告用的句子模板全部改为英文;`tests/test_english_only.py` 检查这一点。
+- 删除 `ui.lang` / `UI_LANG`、`src/utils/i18n.py`、`config/i18n_en.yaml`、`scripts/i18n_keys.py`、`tests/test_i18n.py` 和 `key_numbers.zh.md`;免责声明统一为 `src/utils/disclaimer.py` 中的常量。asset_map 与 mock 报警中的显示文字改为英文。
+- 用本地已同步的集群产物重新生成了 `reports/` 下的表和文档:数值与改动前逐项一致(只有措辞中的个别数字写法不同),PNG、alerts.json 和案例卡片没有变化。
+- 保留中文的:`data/samples/hai_columns.txt` 的表头(生成它的脚本已改为英文,重新生成时表头会变)、`data/samples/smoke_report.xml`(OpenVAS 原始报告)、各中文文档(本文件、`docs/`、`*.zh.md`)。
+- 下面 L1 一节描述的 zh / en 切换机制已删除,仅作历史记录。
 
 ### L1 界面和报告素材英文化(2026-10-09,R1 之后新增的一步)
 

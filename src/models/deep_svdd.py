@@ -52,7 +52,7 @@ class DeepSVDDModel(TorchWindowModel):
             "rep_dim": len(c), "eps": eps, "n_replaced": int(small.sum()),
             "abs_c_before_min": raw.min().item(), "abs_c_before_median": raw.median().item(),
             "abs_c_before_max": raw.max().item(), "n_init_windows": n}
-        self.log.info("Deep SVDD 中心：%d 维，其中 %d 维因接近 0 被设为 ±%g；|c| 最小 %.4g，最大 %.4g",
+        self.log.info("Deep SVDD center: %d dims, %d of them set to ±%g for being close to 0; |c| min %.4g, max %.4g",
                       len(c), int(small.sum()), eps, c.abs().min().item(), c.abs().max().item())
 
     def _dist(self, x: torch.Tensor) -> torch.Tensor:

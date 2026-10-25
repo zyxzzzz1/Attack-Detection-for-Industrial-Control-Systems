@@ -26,7 +26,7 @@ from src.fusion.asset_graph import AssetGraph
 from src.fusion.prioritize import prioritize
 from src.fusion.render_card import make_env, render_all
 from src.fusion.risk import load_params
-from src.utils import i18n
+from src.utils.disclaimer import DISCLAIMER
 from src.vuln.intel import IntelError, enrich
 from src.vuln.parse_report import ReportIntegrityError, parse_reports
 
@@ -60,15 +60,14 @@ def run(cfg: dict, offline: bool = False, formats: tuple[str, ...] = ("md", "htm
     """Run the four steps in order and return a summary of each; raises on error."""
     vcfg, fcfg = cfg["vuln"], cfg["fusion"]
     summary = {}
-    i18n.configure(cfg)   # Display language (ui.lang): affects only the text of the cards and the index page
 
     # 1. parse
     srcs = [ROOT / x for x in vcfg["report_xmls"]]
     parsed = parse_reports(srcs)
     _write_json(ROOT / vcfg["vulns_json"], parsed)
     summary["parse"] = {"reports": len(srcs), **parsed["stats"]}
-    print(f"[1/4 parse] {len(srcs)} 份报告 → {parsed['stats']['vulns']} 条漏洞 "
-          f"（丢弃 Log {parsed['stats']['log_dropped']}、重复 {parsed['stats']['duplicates_dropped']}）")
+    print(f"[1/4 parse] {len(srcs)} reports → {parsed['stats']['vulns']} vulnerabilities "
+          f"({parsed['stats']['log_dropped']} Log and {parsed['stats']['duplicates_dropped']} duplicates dropped)")
 
     # 2. intel
     enriched = enrich(parsed, cfg["intel"], session=session, offline=offline)
@@ -77,8 +76,8 @@ def run(cfg: dict, offline: bool = False, formats: tuple[str, ...] = ("md", "htm
     n_kev = sum(v["in_kev"] for v in enriched["vulns"])
     summary["intel"] = {"kev_vulns": n_kev, "kev_version": info["kev_catalog_version"],
                         "epss_dates": info["epss_dates"]}
-    print(f"[2/4 intel] {'离线' if offline else '在线'}；KEV {info['kev_catalog_version']}，"
-          f"EPSS {info['epss_dates']}；命中 KEV {n_kev} 条")
+    print(f"[2/4 intel] {'offline' if offline else 'online'}; KEV {info['kev_catalog_version']}, "
+          f"EPSS {info['epss_dates']}; {n_kev} in KEV")
 
     # 3. prioritize
     graph = AssetGraph.from_yaml(ROOT / fcfg["asset_map"])
@@ -86,18 +85,18 @@ def run(cfg: dict, offline: bool = False, formats: tuple[str, ...] = ("md", "htm
     prefix = "mock_" if mock else ""
     alerts_path = ROOT / fcfg[f"{prefix}alerts_json"]
     if not alerts_path.exists():
-        hint = ("可运行 python -m scripts.make_mock_alerts" if mock
-                else "先运行 python -m scripts.export_alerts 导出真实报警，或加 --mock 使用 mock 报警")
-        raise FileNotFoundError(f"报警文件不存在：{alerts_path}（{hint}）")
+        hint = ("run python -m scripts.make_mock_alerts" if mock
+                else "run python -m scripts.export_alerts first to export the real alerts, or add --mock to use the mock alerts")
+        raise FileNotFoundError(f"alert file does not exist: {alerts_path} ({hint})")
     alerts = json.loads(alerts_path.read_text(encoding="utf-8"))
     result = prioritize(alerts, enriched["vulns"], graph, params)
     _write_json(ROOT / fcfg[f"{prefix}enriched_alerts_json"], result)
     summary["prioritize"] = {"alerts": len(result["alerts"]), "is_mock": result["is_mock"],
                              "ranking": [(a["alert_id"], a["priority"]) for a in result["alerts"]]}
     shown = result["alerts"][:MAX_RANKING_PRINTED]
-    print(f"[3/4 prioritize] {len(result['alerts'])} 条报警{'（MOCK）' if result['is_mock'] else ''}："
+    print(f"[3/4 prioritize] {len(result['alerts'])} alerts{' (MOCK)' if result['is_mock'] else ''}: "
           + " > ".join(f"{a['alert_id']} {a['priority']:.3f}" for a in shown)
-          + (f" > …（其余 {len(result['alerts']) - len(shown)} 条略）" if len(result["alerts"]) > len(shown) else ""))
+          + (f" > … ({len(result['alerts']) - len(shown)} more omitted)" if len(result["alerts"]) > len(shown) else ""))
 
     # 4. render: generate cards only for the top N by priority
     limit = fcfg.get("max_rendered_alerts") or None
@@ -105,16 +104,16 @@ def run(cfg: dict, offline: bool = False, formats: tuple[str, ...] = ("md", "htm
     written = render_all(result, make_env(ROOT / fcfg["templates_dir"]), cards_dir, list(formats), limit)
     n_cards = min(len(result["alerts"]), limit or len(result["alerts"]))
     summary["render"] = {"files": len(written), "cards": n_cards}
-    print(f"[4/4 render] {len(written)} 个文件（前 {n_cards} / {len(result['alerts'])} 条报警的卡片 + 索引页）→ {cards_dir}")
+    print(f"[4/4 render] {len(written)} files (cards for the top {n_cards} / {len(result['alerts'])} alerts + index page) → {cards_dir}")
     return summary
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="扩展部分一键流水线：parse → intel → prioritize → render")
+    p = argparse.ArgumentParser(description="One-command pipeline of the extension part: parse → intel → prioritize → render")
     p.add_argument("--config", type=Path, default=ROOT / "config" / "config.yaml")
-    p.add_argument("--offline", action="store_true", help="intel 只用 data/intel/ 缓存，不联网")
+    p.add_argument("--offline", action="store_true", help="intel uses only the data/intel/ cache, no network")
     p.add_argument("--format", choices=["md", "html", "both"], default="both")
-    p.add_argument("--mock", action="store_true", help="使用 mock 报警（默认使用真实报警）")
+    p.add_argument("--mock", action="store_true", help="use the mock alerts (real alerts by default)")
     args = p.parse_args()
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
@@ -122,15 +121,15 @@ def main() -> int:
     try:
         run(cfg, offline=args.offline, formats=formats, mock=args.mock)
     except ReportIntegrityError as e:
-        print(f"[失败 parse] {e}", file=sys.stderr)
+        print(f"[FAILED parse] {e}", file=sys.stderr)
         return 4
     except IntelError as e:
-        print(f"[失败 intel] {e}", file=sys.stderr)
+        print(f"[FAILED intel] {e}", file=sys.stderr)
         return 3
     except (FileNotFoundError, ValueError) as e:
-        print(f"[失败] {e}", file=sys.stderr)
+        print(f"[FAILED] {e}", file=sys.stderr)
         return 2
-    print(f"[完成] {i18n.disclaimer()}")
+    print(f"[DONE] {DISCLAIMER}")
     return 0
 
 

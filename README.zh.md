@@ -16,7 +16,7 @@
 （`config.yaml` 的 `fusion.max_rendered_alerts`）。mock 报警 `data/mock/alerts.json`（每条带 `"is_mock": true`）仍然保留：
 流水线加 `--mock`、演示页面在侧边栏切换，由它派生的输出都标注 [MOCK]。
 
-界面和报告素材默认用英文显示（`config/config.yaml` 的 `ui.lang: en`；改成 `zh` 或设置环境变量 `UI_LANG=zh` 即为中文）。
+代码、界面和生成的报告素材全部是英文（2026-10-25 起不再提供中文界面）。
 显示语言只影响文字：Streamlit、告警卡片、索引页、案例文档和图表的标题、坐标轴、图例；不影响任何计算、字段名和数字。
 
 ## 环境
@@ -33,7 +33,7 @@ OpenVAS 使用 Greenbone Community Containers（Docker Compose），gvmd socket 
 ## 主线：结果摘要
 
 全部数字来自学校集群（Minerva，NVIDIA L4）上的完整运行；本地只做开发和冒烟测试。带口径和来源的完整清单见
-[`reports/main/key_numbers.zh.md`](reports/main/key_numbers.zh.md)，文件索引见 [`reports/main/README.zh.md`](reports/main/README.zh.md)。
+[`reports/main/key_numbers.md`](reports/main/key_numbers.md)，文件索引见 [`reports/main/README.zh.md`](reports/main/README.zh.md)。
 
 **检测**（HAI 21.03 test1~5，50 个攻击事件；阈值 = val_thr 分数的 99% 分位数；**不使用 point-adjust**，所以逐点 F1 偏低是预期结果）
 

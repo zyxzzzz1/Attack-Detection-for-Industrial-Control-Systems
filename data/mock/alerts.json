@@ -28,7 +28,7 @@
       }
     ],
     "is_mock": true,
-    "mock_case": "单子系统（P1）"
+    "mock_case": "single subsystem (P1)"
   },
   {
     "alert_id": "MOCK-002",
@@ -59,7 +59,7 @@
       }
     ],
     "is_mock": true,
-    "mock_case": "跨两个子系统（P2 + P1）"
+    "mock_case": "across two subsystems (P2 + P1)"
   },
   {
     "alert_id": "MOCK-003",
@@ -86,7 +86,7 @@
       }
     ],
     "is_mock": true,
-    "mock_case": "刚过阈值（P3）"
+    "mock_case": "just above the threshold (P3)"
   },
   {
     "alert_id": "MOCK-004",
@@ -117,7 +117,7 @@
       }
     ],
     "is_mock": true,
-    "mock_case": "严重报警（P2，S 截断到 1）"
+    "mock_case": "severe alert (P2, S capped at 1)"
   },
   {
     "alert_id": "MOCK-005",
@@ -144,6 +144,6 @@
       }
     ],
     "is_mock": true,
-    "mock_case": "跨子系统且涉及 P4（HIL）"
+    "mock_case": "across subsystems, involving P4 (HIL)"
   }
 ]

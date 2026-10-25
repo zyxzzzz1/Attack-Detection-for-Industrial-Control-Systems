@@ -26,17 +26,17 @@ for arg in "$@"; do
     case "${arg}" in
         --dry-run) RSYNC_OPTS+=(--dry-run -v) ;;
         --with-checkpoints) WITH_CKPT=1 ;;
-        -*) echo "未知参数：${arg}" >&2; exit 2 ;;
+        -*) echo "unknown argument: ${arg}" >&2; exit 2 ;;
         *) RUNS+=("${arg}") ;;
     esac
 done
 
 if [[ "${CLUSTER_ARTIFACT_DIR}" == TODO* ]]; then
-    echo "[错误] 集群产物路径还是 TODO：在 config/cluster.local.yaml 中填写后运行 python -m scripts.make_cluster_jobs。" >&2
+    echo "[ERROR] the cluster artifact path is still TODO: fill it in config/cluster.local.yaml, then run python -m scripts.make_cluster_jobs." >&2
     exit 2
 fi
 if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "${CLUSTER_SSH_ALIAS}" true 2>/dev/null; then
-    echo "[错误] 连不上 ${CLUSTER_SSH_ALIAS}：检查 Chalmers VPN（以及 ~/.ssh/config 中的 ${CLUSTER_SSH_ALIAS} 别名和密钥）。" >&2
+    echo "[ERROR] cannot connect to ${CLUSTER_SSH_ALIAS}: check the Chalmers VPN (and the ${CLUSTER_SSH_ALIAS} alias and key in ~/.ssh/config)." >&2
     exit 1
 fi
 
@@ -61,5 +61,5 @@ else
         rsync "${RSYNC_OPTS[@]}" "${FILTERS[@]}" "${CLUSTER_SSH_ALIAS}:${CLUSTER_ARTIFACT_DIR}/${run}/" "${LOCAL}/${run}/"
     done
 fi
-echo "[完成] 产物已拉回 ${LOCAL}"
+echo "[DONE] artifacts pulled to ${LOCAL}"
 find "${LOCAL}" -name run_manifest.json -not -path '*/smoke/*' | sort | sed 's/^/  /'

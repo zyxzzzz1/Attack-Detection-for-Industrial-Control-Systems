@@ -46,7 +46,7 @@ def run(ctx) -> dict:
     limits = ctx.cfg["ml"]["diagnosis"]
     _, per_sensor = score_val_thr(ctx)
     if per_sensor is None:
-        ctx.log.info("模型 %s 不输出逐传感器误差，跳过诊断", ctx.model)
+        ctx.log.info("model %s produces no per-sensor errors, skipping the diagnosis", ctx.model)
         return {"skipped": True}
     data = ctx.ensure_data()
     df = sensor_contributions(per_sensor, data.pre.features).merge(scale_profile(data), on="sensor")
@@ -57,15 +57,15 @@ def run(ctx) -> dict:
     result = {"skipped": False, "top_sensor": top["sensor"], "top_share": float(top["share"]),
               "top5": {r.sensor: round(float(r.share), 4) for r in df.head(5).itertuples()},
               "max_sensor_share": limits["max_sensor_share"], "over_limit": over, "gated": gated}
-    ctx.log.info("val_thr 上占比最大的传感器：%s（%.1f%%），前 5：%s", top["sensor"], 100 * top["share"], result["top5"])
+    ctx.log.info("sensor with the largest share on val_thr: %s (%.1f%%), top 5: %s", top["sensor"], 100 * top["share"], result["top5"])
     if over and ctx.smoke:
-        ctx.log.warning("冒烟测试的数字只用于检查流程，超限不停下")
+        ctx.log.warning("smoke-test numbers are only for checking the pipeline; not stopping despite the limit")
     elif over and gated and not limits["allow_over_limit"]:
         ctx.manifest.stage("diagnose", **result)
-        raise DiagnosisStop(f"{top['sensor']} 占 val_thr 重构 MSE 的 {100 * top['share']:.1f}%，超过 "
-                            f"{100 * limits['max_sensor_share']:.0f}%：在读取 test 之前停下，等待决定是否调整缩放方式")
+        raise DiagnosisStop(f"{top['sensor']} accounts for {100 * top['share']:.1f}% of the val_thr reconstruction MSE, above "
+                            f"{100 * limits['max_sensor_share']:.0f}%: stopping before reading test, awaiting a decision on whether to change the scaling")
     return result
 
 
 if __name__ == "__main__":
-    sys.exit(stage_cli("diagnose", "只用 val_thr 的重尾特征诊断"))
+    sys.exit(stage_cli("diagnose", "Heavy-tail feature diagnosis on val_thr only"))

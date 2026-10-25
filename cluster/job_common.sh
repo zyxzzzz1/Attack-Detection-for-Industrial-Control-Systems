@@ -20,12 +20,12 @@ if [[ "${SMOKE}" == "1" ]]; then
     SMOKE_ARGS=(--smoke)
 else
     if [[ -z "${SLURM_JOB_ID:-}" ]]; then
-        echo "[错误] 登录节点上禁止直接运行计算任务：请用 sbatch 或 srun 提交（本地冒烟请加 --smoke）。" >&2
+        echo "[ERROR] running compute tasks directly on a login node is forbidden: submit with sbatch or srun (add --smoke for a local smoke run)." >&2
         exit 2
     fi
     if [[ "${CLUSTER_TODO_COUNT}" != "0" ]]; then
-        echo "[错误] config/cluster.yaml 还有 ${CLUSTER_TODO_COUNT} 个影响作业的 TODO：${CLUSTER_TODO_KEYS}" >&2
-        echo "       补全后运行 python -m scripts.make_cluster_jobs 重新生成，再推送到集群。" >&2
+        echo "[ERROR] config/cluster.yaml still has ${CLUSTER_TODO_COUNT} job-affecting TODOs: ${CLUSTER_TODO_KEYS}" >&2
+        echo "        fill them in, regenerate with python -m scripts.make_cluster_jobs and push to the cluster again." >&2
         exit 2
     fi
     ROOT="${CLUSTER_CODE_DIR}"
@@ -51,5 +51,5 @@ export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-${OMP_NUM_THREADS:-4}}"
 export MKL_NUM_THREADS="${OMP_NUM_THREADS}"
 export PYTHONUNBUFFERED=1
 
-echo "[作业] $(date '+%F %T') 主机 $(hostname) 作业 ${SLURM_JOB_ID:-本地} array ${SLURM_ARRAY_TASK_ID:--} 冒烟 ${SMOKE}"
-echo "[作业] 代码 ${ROOT}  数据 ${HAI_DATA_DIR:-（config 默认）}  产物 ${ARTIFACT_DIR}  python $(python --version 2>&1)"
+echo "[JOB] $(date '+%F %T') host $(hostname) job ${SLURM_JOB_ID:-local} array ${SLURM_ARRAY_TASK_ID:--} smoke ${SMOKE}"
+echo "[JOB] code ${ROOT}  data ${HAI_DATA_DIR:-(config default)}  artifacts ${ARTIFACT_DIR}  python $(python --version 2>&1)"

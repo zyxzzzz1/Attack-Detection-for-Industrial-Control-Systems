@@ -33,7 +33,7 @@ class Preprocessor:
 
     def fit(self, train_segments: list[Segment]) -> "Preprocessor":
         if any(s.split != "train" for s in train_segments):
-            raise ValueError("Preprocessor 只能在 train 部分上 fit（约束 5）")
+            raise ValueError("Preprocessor can only be fit on the train part (constraint 5)")
         self.columns = train_segments[0].columns
         for s in train_segments:
             self._check(s)
@@ -51,9 +51,9 @@ class Preprocessor:
 
     def _check(self, seg: Segment) -> None:
         if seg.columns != self.columns:
-            raise ValueError(f"{seg.name} 的列与训练数据不一致")
+            raise ValueError(f"the columns of {seg.name} do not match the training data")
         if np.isnan(seg.x).any():
-            raise ValueError(f"{seg.name} 含缺失值；HAI 21.03 原始数据没有缺失（见 data_summary.md），请检查数据文件")
+            raise ValueError(f"{seg.name} contains missing values; the raw HAI 21.03 data has none (see data_summary.md), check the data files")
 
     def transform(self, seg: Segment) -> Segment:
         self._check(seg)
@@ -101,10 +101,10 @@ def prepare_test(cfg: dict, pre: Preprocessor, fraction: float = 1.0) -> list[Se
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="数据划分与预处理摘要（不读取 test 文件）")
+    p = argparse.ArgumentParser(description="Data split and preprocessing summary (test files are not read)")
     p.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
-    p.add_argument("--fraction", type=float, default=1.0, help="每个文件只取前这一比例的行（冒烟测试用）")
-    p.add_argument("--save-dir", type=Path, help="保存 scaler.joblib 与 preprocess.json 的目录")
+    p.add_argument("--fraction", type=float, default=1.0, help="take only this fraction of the rows of each file (for smoke tests)")
+    p.add_argument("--save-dir", type=Path, help="directory to save scaler.joblib and preprocess.json in")
     args = p.parse_args()
 
     cfg = load_config(args.config)
@@ -118,7 +118,7 @@ def main() -> None:
         data.pre.save(args.save_dir / "scaler.joblib")
         (args.save_dir / "preprocess.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
                                                        encoding="utf-8")
-        print(f"[保存] {args.save_dir}")
+        print(f"[SAVED] {args.save_dir}")
 
 
 if __name__ == "__main__":

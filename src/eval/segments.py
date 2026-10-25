@@ -13,10 +13,10 @@ def to_segments(binary, merge_gap_s: int = 0) -> list[tuple[int, int]]:
     The input must be a single file (or part) contiguous per second; do not concatenate several files before passing them in.
     """
     if merge_gap_s < 0:
-        raise ValueError("merge_gap_s 不能为负")
+        raise ValueError("merge_gap_s must not be negative")
     b = np.asarray(binary).astype(bool)
     if b.ndim != 1:
-        raise ValueError("binary 必须是一维序列")
+        raise ValueError("binary must be a one-dimensional sequence")
     if not b.any():
         return []
     edges = np.diff(np.concatenate(([0], b.astype(np.int8), [0])))

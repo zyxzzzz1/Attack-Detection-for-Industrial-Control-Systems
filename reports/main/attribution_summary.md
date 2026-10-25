@@ -1,15 +1,15 @@
-# 归因评估汇总
+# Attribution evaluation summary
 
-每个报警段取段内各传感器重构误差均值的占比，Top-1 传感器所属子系统落在事件的子系统集合内即为命中。报警段与多个事件重叠时（n_multi_event_segments 个），主口径按重叠时间最长的那个事件判断（n_evaluable、n_hit、subsystem_hit_rate）；并集口径（Top-1 所属子系统落在这些事件子系统集合的并集内，n_evaluable_union、n_hit_union、subsystem_hit_rate_union）作为补充，只会不低于主口径的命中数。只有与攻击事件重叠、且事件有子系统标签的报警段计入命中率；不与攻击重叠的报警段（n_non_overlap）和只与无子系统标签事件重叠的报警段单列。top1_p4_ratio 是与攻击重叠的报警段中 Top-1 落在 P4 的比例（P4 没有子系统标签，落在 P4 必然不命中）。
+For each alarm segment, take the share of each sensor's mean reconstruction error within the segment; a hit if the Top-1 sensor's subsystem is in the event's subsystem set. When an alarm segment overlaps several events (n_multi_event_segments of them), the primary definition uses the event with the longest overlap (n_evaluable, n_hit, subsystem_hit_rate); the union definition (Top-1 subsystem in the union of those events' subsystem sets, n_evaluable_union, n_hit_union, subsystem_hit_rate_union) is a supplement and can only have at least as many hits as the primary one. Only alarm segments overlapping an attack event whose event has subsystem labels count toward the hit rate; alarm segments overlapping no attack (n_non_overlap) and those overlapping only events without subsystem labels are listed separately. top1_p4_ratio is the fraction of attack-overlapping alarm segments whose Top-1 is in P4 (P4 has no subsystem label, so Top-1 in P4 is always a miss).
 
-按事件的命中率有两种口径，分母都是被检出且有子系统标签的事件：
+There are two per-event hit-rate definitions, both with the detected events that have subsystem labels as the denominator:
 
-- **主口径 event_first_hit_rate**：取每个事件的第一个与之重叠的报警段（按报警段开始时间），看这个报警段的 Top-1 所属子系统是否在事件的子系统集合内。它对应运维人员最先看到的那一条报警；报警段的误差按整段计算（报警可能在事件开始之前就已经开始）。
-- **补充口径 event_hit_rate**：把事件区间内全部报警秒的误差合并后取 Top-1。它用到了事件结束之前的全部报警，在报警刚出现时还得不到，所以只作为补充。
+- **Primary, event_first_hit_rate**: take each event's first overlapping alarm segment (by segment start time) and check whether its Top-1 subsystem is in the event's subsystem set. This is the alert an operator sees first; the segment's error is computed over the whole segment (the alarm may start before the event does).
+- **Supplementary, event_hit_rate**: merge the errors of all alarm seconds within the event interval and take the Top-1. It uses every alarm up to the end of the event, which is not available when the alarm first appears, so it is only a supplement.
 
-各命中率后的 ci_low、ci_high 是 95% Wilson 置信区间。分母都很小，区间很宽，模型之间的差别要结合区间来读。
+ci_low and ci_high after each hit rate are 95% Wilson confidence intervals. The denominators are small and the intervals wide, so differences between models must be read together with the intervals.
 
-传感器级 Hit@k 未做：HAI 21.03 的数据文件没有逐传感器的攻击目标标注。
+Sensor-level Hit@k was not done: the HAI 21.03 data files have no per-sensor attack-target annotation.
 
 | model | n_alarm_segments | n_overlap_attack | n_evaluable | n_hit | subsystem_hit_rate | subsystem_hit_rate_ci_low | subsystem_hit_rate_ci_high | n_multi_event_segments | n_evaluable_union | n_hit_union | subsystem_hit_rate_union | n_top1_p4 | top1_p4_ratio | n_overlap_no_subsystem_label | n_non_overlap | n_events | n_events_without_subsystem | n_events_attributed | n_events_first_evaluable | n_events_first_hit | event_first_hit_rate | event_first_hit_rate_ci_low | event_first_hit_rate_ci_high | n_events_merged_hit | event_hit_rate | event_hit_rate_ci_low | event_hit_rate_ci_high |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -17,34 +17,34 @@
 | lstm_vae | 2372 | 57 | 57 | 52 | 0.9123 | 0.8106 | 0.9619 | 0 | 57 | 52 | 0.9123 | 4 | 0.0702 | 0 | 2315 | 50 | 0 | 48 | 48 | 47 | 0.9792 | 0.8910 | 0.9963 | 47 | 0.9792 | 0.8910 | 0.9963 |
 | pca | 834 | 53 | 53 | 37 | 0.6981 | 0.5646 | 0.8048 | 0 | 53 | 37 | 0.6981 | 0 | 0.0000 | 0 | 781 | 50 | 0 | 48 | 48 | 36 | 0.7500 | 0.6122 | 0.8508 | 34 | 0.7083 | 0.5682 | 0.8176 |
 
-## 按报警段长度分组
+## By alarm-segment duration
 
-只含与攻击重叠且可评估的报警段。variant = main 为主结果；valnorm 为下面的探索性分析。
+Only attack-overlapping, evaluable alarm segments. variant = main is the main result; valnorm is the exploratory analysis below.
 
 | model | variant | duration_group | n | n_hit | rate | ci_low | ci_high |
 |---|---|---|---|---|---|---|---|
-| lstm_ae | main | <10 秒 | 20 | 7 | 0.3500 | 0.1812 | 0.5671 |
-| lstm_ae | main | 10–60 秒 | 4 | 1 | 0.2500 | 0.0456 | 0.6994 |
-| lstm_ae | main | >60 秒 | 48 | 46 | 0.9583 | 0.8602 | 0.9885 |
-| lstm_ae | valnorm | <10 秒 | 20 | 13 | 0.6500 | 0.4329 | 0.8188 |
-| lstm_ae | valnorm | 10–60 秒 | 4 | 4 | 1.0000 | 0.5101 | 1.0000 |
-| lstm_ae | valnorm | >60 秒 | 48 | 44 | 0.9167 | 0.8045 | 0.9671 |
-| lstm_vae | main | <10 秒 | 4 | 2 | 0.5000 | 0.1500 | 0.8500 |
-| lstm_vae | main | 10–60 秒 | 3 | 0 | 0.0000 | 0.0000 | 0.5615 |
-| lstm_vae | main | >60 秒 | 50 | 50 | 1.0000 | 0.9287 | 1.0000 |
-| lstm_vae | valnorm | <10 秒 | 4 | 4 | 1.0000 | 0.5101 | 1.0000 |
-| lstm_vae | valnorm | 10–60 秒 | 3 | 2 | 0.6667 | 0.2077 | 0.9385 |
-| lstm_vae | valnorm | >60 秒 | 50 | 46 | 0.9200 | 0.8116 | 0.9685 |
-| pca | main | <10 秒 | 5 | 2 | 0.4000 | 0.1176 | 0.7693 |
-| pca | main | 10–60 秒 | 2 | 1 | 0.5000 | 0.0945 | 0.9055 |
-| pca | main | >60 秒 | 46 | 34 | 0.7391 | 0.5974 | 0.8440 |
-| pca | valnorm | <10 秒 | 5 | 2 | 0.4000 | 0.1176 | 0.7693 |
-| pca | valnorm | 10–60 秒 | 2 | 2 | 1.0000 | 0.3424 | 1.0000 |
-| pca | valnorm | >60 秒 | 46 | 40 | 0.8696 | 0.7433 | 0.9388 |
+| lstm_ae | main | <10 s | 20 | 7 | 0.3500 | 0.1812 | 0.5671 |
+| lstm_ae | main | 10–60 s | 4 | 1 | 0.2500 | 0.0456 | 0.6994 |
+| lstm_ae | main | >60 s | 48 | 46 | 0.9583 | 0.8602 | 0.9885 |
+| lstm_ae | valnorm | <10 s | 20 | 13 | 0.6500 | 0.4329 | 0.8188 |
+| lstm_ae | valnorm | 10–60 s | 4 | 4 | 1.0000 | 0.5101 | 1.0000 |
+| lstm_ae | valnorm | >60 s | 48 | 44 | 0.9167 | 0.8045 | 0.9671 |
+| lstm_vae | main | <10 s | 4 | 2 | 0.5000 | 0.1500 | 0.8500 |
+| lstm_vae | main | 10–60 s | 3 | 0 | 0.0000 | 0.0000 | 0.5615 |
+| lstm_vae | main | >60 s | 50 | 50 | 1.0000 | 0.9287 | 1.0000 |
+| lstm_vae | valnorm | <10 s | 4 | 4 | 1.0000 | 0.5101 | 1.0000 |
+| lstm_vae | valnorm | 10–60 s | 3 | 2 | 0.6667 | 0.2077 | 0.9385 |
+| lstm_vae | valnorm | >60 s | 50 | 46 | 0.9200 | 0.8116 | 0.9685 |
+| pca | main | <10 s | 5 | 2 | 0.4000 | 0.1176 | 0.7693 |
+| pca | main | 10–60 s | 2 | 1 | 0.5000 | 0.0945 | 0.9055 |
+| pca | main | >60 s | 46 | 34 | 0.7391 | 0.5974 | 0.8440 |
+| pca | valnorm | <10 s | 5 | 2 | 0.4000 | 0.1176 | 0.7693 |
+| pca | valnorm | 10–60 s | 2 | 2 | 1.0000 | 0.3424 | 1.0000 |
+| pca | valnorm | >60 s | 46 | 40 | 0.8696 | 0.7433 | 0.9388 |
 
-## 多随机种子
+## Multiple random seeds
 
-对 ml.seed_study 中每个种子的运行各算一遍归因（配置除种子外完全相同）；最后两行是均值和样本标准差（ddof=1）。主结果仍以主模型运行（表中第一行的种子）为准。
+Attribution computed once for each seed run in ml.seed_study (identical configuration apart from the seed); the last two rows are the mean and sample std (ddof=1). The main result is still the main-model run (the seed in the first row).
 
 | seed | run_name | n_alarm_segments | n_evaluable | n_hit | subsystem_hit_rate | n_events_first_evaluable | n_events_first_hit | event_first_hit_rate | n_events_merged_hit | event_hit_rate | n_top1_p4 | top1_p4_ratio |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -56,18 +56,18 @@
 | mean |  | 1504.0000 | 65.2000 | 50.6000 | 0.7775 | 49.6000 | 43.4000 | 0.8751 | 45.6000 | 0.9194 | 7.4000 | 0.1135 |
 | std |  | 186.0027 | 4.5497 | 2.3022 | 0.0329 | 0.5477 | 1.1402 | 0.0259 | 0.5477 | 0.0137 | 2.0736 | 0.0310 |
 
-## 探索性分析：按 val_thr 平均误差归一化（事后分析，不替换主结果）
+## Exploratory analysis: normalized by the val_thr mean error (post hoc, does not replace the main results)
 
-**这是看到主结果之后才做的分析。** 做法：报警段内各传感器的平均误差先除以该传感器在 val_thr 上的平均误差，再归一化、排 Top-k，即比较的是「相对平时误差的倍数」。基线只来自 val_thr，没有用到测试标签；但「要不要做这一步」是在看过测试集上的命中率之后才决定的，所以它的命中率是乐观的，不能当作事先确定的方法的结果来引用。主结果、alerts.json 和告警卡片都不使用这种归一化。
+**This analysis was done after seeing the main results.** Method: the mean error of each sensor within the alarm segment is first divided by that sensor's mean error on val_thr, then normalized and ranked for Top-k, i.e. what is compared is the "multiple of the usual error". The baseline comes only from val_thr and uses no test labels; but the decision to do this step was made after seeing the hit rates on the test set, so its hit rates are optimistic and must not be cited as the result of a method fixed in advance. The main results, alerts.json and the alert cards do not use this normalization.
 
 | model | level | n | n_hit_main | rate_main | n_hit_valnorm | rate_valnorm | rate_valnorm_ci_low | rate_valnorm_ci_high | n_top1_p4_main | n_top1_p4_valnorm | n_segments_top1_changed |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| lstm_ae | 报警段 | 72 | 54 | 0.7500 | 61 | 0.8472 | 0.7468 | 0.9125 | 6 | 3 | 57 |
-| lstm_ae | 事件（第一个报警段） | 50 | 43 | 0.8600 | 43 | 0.8600 | 0.7381 | 0.9305 | 6 | 3 | 57 |
-| lstm_ae | 事件（合并） | 50 | 45 | 0.9000 | 46 | 0.9200 | 0.8116 | 0.9685 | 6 | 3 | 57 |
-| lstm_vae | 报警段 | 57 | 52 | 0.9123 | 52 | 0.9123 | 0.8106 | 0.9619 | 4 | 2 | 33 |
-| lstm_vae | 事件（第一个报警段） | 48 | 47 | 0.9792 | 44 | 0.9167 | 0.8045 | 0.9671 | 4 | 2 | 33 |
-| lstm_vae | 事件（合并） | 48 | 47 | 0.9792 | 44 | 0.9167 | 0.8045 | 0.9671 | 4 | 2 | 33 |
-| pca | 报警段 | 53 | 37 | 0.6981 | 44 | 0.8302 | 0.7077 | 0.9080 | 0 | 1 | 35 |
-| pca | 事件（第一个报警段） | 48 | 36 | 0.7500 | 41 | 0.8542 | 0.7283 | 0.9275 | 0 | 1 | 35 |
-| pca | 事件（合并） | 48 | 34 | 0.7083 | 42 | 0.8750 | 0.7530 | 0.9414 | 0 | 1 | 35 |
+| lstm_ae | alarm segment | 72 | 54 | 0.7500 | 61 | 0.8472 | 0.7468 | 0.9125 | 6 | 3 | 57 |
+| lstm_ae | event (first alarm segment) | 50 | 43 | 0.8600 | 43 | 0.8600 | 0.7381 | 0.9305 | 6 | 3 | 57 |
+| lstm_ae | event (merged) | 50 | 45 | 0.9000 | 46 | 0.9200 | 0.8116 | 0.9685 | 6 | 3 | 57 |
+| lstm_vae | alarm segment | 57 | 52 | 0.9123 | 52 | 0.9123 | 0.8106 | 0.9619 | 4 | 2 | 33 |
+| lstm_vae | event (first alarm segment) | 48 | 47 | 0.9792 | 44 | 0.9167 | 0.8045 | 0.9671 | 4 | 2 | 33 |
+| lstm_vae | event (merged) | 48 | 47 | 0.9792 | 44 | 0.9167 | 0.8045 | 0.9671 | 4 | 2 | 33 |
+| pca | alarm segment | 53 | 37 | 0.6981 | 44 | 0.8302 | 0.7077 | 0.9080 | 0 | 1 | 35 |
+| pca | event (first alarm segment) | 48 | 36 | 0.7500 | 41 | 0.8542 | 0.7283 | 0.9275 | 0 | 1 | 35 |
+| pca | event (merged) | 48 | 34 | 0.7083 | 42 | 0.8750 | 0.7530 | 0.9414 | 0 | 1 | 35 |

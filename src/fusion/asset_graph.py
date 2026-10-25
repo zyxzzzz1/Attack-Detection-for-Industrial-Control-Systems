@@ -40,7 +40,7 @@ class Asset(BaseModel):
     @model_validator(mode="after")
     def _scanned_needs_ip(self):
         if self.scanned and self.ip is None:
-            raise ValueError("scanned: true 的资产必须有 ip")
+            raise ValueError("assets with scanned: true must have an ip")
         return self
 
 
@@ -56,21 +56,21 @@ class AssetMap(BaseModel):
         for sid, sub in self.subsystems.items():
             for a in sub.assets:
                 if a not in self.assets:
-                    errors.append(f"子系统 {sid} 引用了未定义的资产 {a}")
+                    errors.append(f"subsystem {sid} references undefined asset {a}")
         for src, dst in self.edges:
             for end in (src, dst):
                 if end not in self.assets:
-                    errors.append(f"edge [{src}, {dst}] 的端点 {end} 未定义")
+                    errors.append(f"endpoint {end} of edge [{src}, {dst}] is undefined")
             if src == dst:
-                errors.append(f"edge [{src}, {dst}] 是自环")
+                errors.append(f"edge [{src}, {dst}] is a self-loop")
         prefixes = [s.sensor_prefix for s in self.subsystems.values()]
         if len(prefixes) != len(set(prefixes)):
-            errors.append(f"sensor_prefix 有重复：{prefixes}")
+            errors.append(f"duplicate sensor_prefix: {prefixes}")
         ips = [str(a.ip) for a in self.assets.values() if a.ip is not None]
         if len(ips) != len(set(ips)):
-            errors.append(f"资产 ip 有重复：{ips}")
+            errors.append(f"duplicate asset ip: {ips}")
         if errors:
-            raise ValueError("；".join(errors))
+            raise ValueError("; ".join(errors))
         return self
 
 
@@ -134,18 +134,18 @@ class AssetGraph:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="校验 asset_map.yaml 并打印资产图")
+    p = argparse.ArgumentParser(description="Validate asset_map.yaml and print the asset graph")
     p.add_argument("--config", type=Path, default=ROOT / "config" / "config.yaml")
-    p.add_argument("--asset-map", type=Path, help="默认取 config.yaml 的 fusion.asset_map")
+    p.add_argument("--asset-map", type=Path, help="defaults to fusion.asset_map in config.yaml")
     args = p.parse_args()
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)["fusion"]
     g = AssetGraph.from_yaml(args.asset_map or ROOT / cfg["asset_map"])
     for sid, sub in g.subsystems.items():
         print(f"{sid} {sub.name} criticality={sub.criticality}")
-        print(f"  上游资产：{g.upstream_assets(sid)}")
+        print(f"  upstream assets: {g.upstream_assets(sid)}")
         for path in g.intrusion_paths(sid):
-            print(f"  路径：{' → '.join(path)}")
+            print(f"  path: {' → '.join(path)}")
     return 0
 
 

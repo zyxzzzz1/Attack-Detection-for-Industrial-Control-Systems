@@ -27,14 +27,14 @@ for arg in "$@"; do
         --dry-run) RSYNC_OPTS+=(--dry-run -v) ;;
         --data) MODE=data ;;
         --allow-dirty) ALLOW_DIRTY=1 ;;
-        *) echo "未知参数：${arg}" >&2; exit 2 ;;
+        *) echo "unknown argument: ${arg}" >&2; exit 2 ;;
     esac
 done
 
 for key in CLUSTER_CODE_DIR CLUSTER_DATA_DIR; do
     if [[ "${!key}" == TODO* ]]; then
-        echo "[错误] 集群路径还是 TODO（${key}）：在 config/cluster.local.yaml 中填写（示例见 config/cluster.local.example.yaml），" >&2
-        echo "       再运行 python -m scripts.make_cluster_jobs 生成 cluster/local/。" >&2
+        echo "[ERROR] cluster path is still TODO (${key}): fill it in config/cluster.local.yaml (example in config/cluster.local.example.yaml)," >&2
+        echo "        then run python -m scripts.make_cluster_jobs to generate cluster/local/." >&2
         exit 2
     fi
 done
@@ -43,14 +43,14 @@ done
 cd "${ROOT}"
 DIRTY="$(git status --porcelain)"
 if [[ "${MODE}" == "code" && -n "${DIRTY}" && "${ALLOW_DIRTY}" != "1" ]]; then
-    echo "[错误] 工作区有未提交的修改，拒绝推送（集群上运行的代码会与提交号对不上）：" >&2
+    echo "[ERROR] the worktree has uncommitted changes, refusing to push (the code run on the cluster would not match the commit hash):" >&2
     echo "${DIRTY}" | sed 's/^/    /' >&2
-    echo "       请先提交；确实要推送未提交的代码时加 --allow-dirty（manifest 中会标记 dirty=true）。" >&2
+    echo "        commit first; to really push uncommitted code add --allow-dirty (the manifest will be marked dirty=true)." >&2
     exit 3
 fi
 
 if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "${CLUSTER_SSH_ALIAS}" true 2>/dev/null; then
-    echo "[错误] 连不上 ${CLUSTER_SSH_ALIAS}：检查 Chalmers VPN（以及 ~/.ssh/config 中的 ${CLUSTER_SSH_ALIAS} 别名和密钥）。" >&2
+    echo "[ERROR] cannot connect to ${CLUSTER_SSH_ALIAS}: check the Chalmers VPN (and the ${CLUSTER_SSH_ALIAS} alias and key in ~/.ssh/config)." >&2
     exit 1
 fi
 
@@ -59,14 +59,14 @@ if [[ "${MODE}" == "data" ]]; then
     ssh "${CLUSTER_SSH_ALIAS}" "mkdir -p '${CLUSTER_DATA_DIR}'"
     rsync "${RSYNC_OPTS[@]}" --include='*.csv.gz' --include='download_manifest.json' --exclude='*' \
         "${LOCAL_DATA}/" "${CLUSTER_SSH_ALIAS}:${CLUSTER_DATA_DIR}/"
-    echo "[完成] 数据已推送到 ${CLUSTER_SSH_ALIAS}:${CLUSTER_DATA_DIR}（在集群上用 srun 运行核对，见 runbook）"
+    echo "[DONE] data pushed to ${CLUSTER_SSH_ALIAS}:${CLUSTER_DATA_DIR} (run the verification on the cluster via srun, see the runbook)"
     exit 0
 fi
 
 COMMIT="$(git rev-parse HEAD)"
 if [[ -n "${DIRTY}" ]]; then
     COMMIT="${COMMIT} dirty"
-    echo "[警告] --allow-dirty：推送含未提交修改的代码，run_manifest.json 会记为 dirty=true。不要用于正式运行。" >&2
+    echo "[WARN] --allow-dirty: pushing code with uncommitted changes; run_manifest.json will record dirty=true. Do not use for official runs." >&2
 fi
 LIST="$(mktemp)"
 trap 'rm -f "${LIST}" "${ROOT}/.git_commit"' EXIT
@@ -86,5 +86,5 @@ if [[ -d "${ROOT}/cluster/local" ]]; then
     rsync "${RSYNC_OPTS[@]}" --include='*.sbatch' --include='cluster_env.sh' --exclude='*' \
         "${ROOT}/cluster/local/" "${CLUSTER_SSH_ALIAS}:${CLUSTER_CODE_DIR}/cluster/"
 fi
-echo "[完成] 代码已推送到 ${CLUSTER_SSH_ALIAS}:${CLUSTER_CODE_DIR}（提交 ${COMMIT}）"
-echo "[提示] 本地删除的文件不会在集群上自动删除；需要时在集群上手动清理。"
+echo "[DONE] code pushed to ${CLUSTER_SSH_ALIAS}:${CLUSTER_CODE_DIR} (commit ${COMMIT})"
+echo "[INFO] files deleted locally are not deleted on the cluster automatically; clean them up there by hand if needed."

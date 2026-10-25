@@ -18,14 +18,14 @@ def report_problem(run_dir: Path, ok_status: tuple[str, ...] = ("completed",)) -
     """Reason a run cannot be used for the official report; None if it can."""
     path = Path(run_dir) / MANIFEST_NAME
     if not path.exists():
-        return "没有 run_manifest.json"
+        return "no run_manifest.json"
     m = json.loads(path.read_text(encoding="utf-8"))
     if m.get("local_diagnostic"):
-        return "本地诊断运行（local_diagnostic=true，只用于决策，不得写进报告）"
+        return "local diagnostic run (local_diagnostic=true, only for decisions, must not go into the report)"
     if m.get("smoke"):
-        return "冒烟测试的产物（数字不得写进报告）"
+        return "smoke-test artifacts (the numbers must not go into the report)"
     if m.get("git_dirty") is not False:
-        return f"git_dirty = {m.get('git_dirty')}（必须为 false）"
+        return f"git_dirty = {m.get('git_dirty')} (must be false)"
     if m.get("status") not in ok_status:
         return f"status = {m.get('status')}"
     return None
@@ -35,10 +35,10 @@ def smoke_problem(run_dir: Path) -> str | None:
     """Reason a run cannot be used in smoke mode: it must really be a completed smoke run."""
     path = Path(run_dir) / MANIFEST_NAME
     if not path.exists():
-        return "没有 run_manifest.json"
+        return "no run_manifest.json"
     m = json.loads(path.read_text(encoding="utf-8"))
     if not m.get("smoke"):
-        return "不是冒烟运行（冒烟模式只读冒烟产物）"
+        return "not a smoke run (smoke mode reads only smoke artifacts)"
     if m.get("status") != "completed":
         return f"status = {m.get('status')}"
     return None
@@ -63,22 +63,22 @@ class ReportSource:
         for name in run_names:
             run_dir = self.root / name
             missing = [f for f in required if not (run_dir / f).exists()]
-            problem = self.problem(name) if run_dir.exists() else "运行目录不存在（尚未运行或尚未同步）"
+            problem = self.problem(name) if run_dir.exists() else "run directory does not exist (not run or not synced yet)"
             if not problem and missing:
-                problem = f"缺少 {', '.join(missing)}"
+                problem = f"missing {', '.join(missing)}"
             if problem:
-                print(f"[跳过] {name}: {problem}")
+                print(f"[SKIPPED] {name}: {problem}")
             else:
                 ok.append(name)
         return ok
 
     def banner(self) -> None:
         if self.smoke:
-            print(f"[冒烟] 读取 {self.root}，写到 {self.out}；数字只用于检查流程，不得写进报告")
+            print(f"[SMOKE] reading {self.root}, writing to {self.out}; the numbers are only for checking the pipeline and must not go into the report")
 
 
 def add_common_args(p: argparse.ArgumentParser) -> None:
     from src.utils.paths import DEFAULT_CONFIG
     p.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     p.add_argument("--smoke", action="store_true",
-                   help="用冒烟产物（产物目录/smoke/）开发和检查流程，输出写到 产物目录/smoke_reports/，不进报告目录")
+                   help="develop and check the pipeline on smoke artifacts (<artifact dir>/smoke/), writing to <artifact dir>/smoke_reports/, not the report directory")

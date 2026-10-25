@@ -43,7 +43,7 @@ def read_segment(path: Path, time_col: str, exclude_cols: list[str], split: str)
     t = pd.to_datetime(df[time_col])
     step = t.diff().dt.total_seconds().to_numpy()[1:]
     if not (step == 1).all():
-        raise ValueError(f"{path.name} 不是逐秒连续（有 {(step != 1).sum()} 处间隔不等于 1 秒），不能作为一个连续段")
+        raise ValueError(f"{path.name} is not contiguous per second ({(step != 1).sum()} steps not equal to 1 s), so it cannot be one contiguous segment")
     x = df[sensors].to_numpy(dtype=np.float32)
     return Segment(name=path.name, split=split, start_row=0, start_time=str(t.iloc[0]), columns=sensors, x=x)
 
@@ -67,7 +67,7 @@ def load_train_segments(cfg: dict, fraction: float = 1.0) -> list[Segment]:
         segments.append(_take_fraction(seg, fraction))
     starts = [pd.Timestamp(s.start_time) for s in segments]
     if starts != sorted(starts):
-        raise ValueError("train 文件未按时间顺序排列，请检查 ml.hai.train_files")
+        raise ValueError("the train files are not in time order, check ml.hai.train_files")
     return segments
 
 

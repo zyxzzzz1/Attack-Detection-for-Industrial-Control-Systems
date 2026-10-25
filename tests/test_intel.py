@@ -39,7 +39,7 @@ class FakeSession:
         self.fail = list(fail)
 
     def get(self, url, params=None, timeout=None):
-        assert timeout is not None, "请求必须设置超时"
+        assert timeout is not None, "requests must set a timeout"
         self.calls.append((url, params))
         if self.fail:
             f = self.fail.pop(0)
@@ -160,10 +160,10 @@ def test_offline_uses_cache_only(cfg, tmp_path):
 
 
 def test_offline_missing_cache_raises(cfg):
-    with pytest.raises(IntelError, match="KEV 缓存不存在"):
+    with pytest.raises(IntelError, match="KEV cache does not exist"):
         enrich(vulns(["CVE-2015-0240"]), cfg, session=FakeSession(), offline=True)
     enrich(vulns(["CVE-2015-0240"]), cfg, session=FakeSession())
-    with pytest.raises(IntelError, match="EPSS 缓存缺少 1 个"):
+    with pytest.raises(IntelError, match="EPSS cache is missing 1 CVEs"):
         enrich(vulns(["CVE-2011-2523"]), cfg, session=FakeSession(), offline=True)
 
 
@@ -176,7 +176,7 @@ def test_retry_then_success(cfg):
 
 def test_retry_exhausted_raises(cfg):
     s = FakeSession(fail=[requests.ConnectionError("x")] * 3)
-    with pytest.raises(IntelError, match="已重试 2 次"):
+    with pytest.raises(IntelError, match="retried 2 times"):
         enrich(vulns(["CVE-2015-0240"]), cfg, session=s)
     assert len(s.calls) == 3
 
@@ -196,7 +196,7 @@ def test_epss_truncated_page_raises(cfg):
                 r._body["total"] = len(r._body["data"]) + 1
             return r
 
-    with pytest.raises(IntelError, match="分页截断"):
+    with pytest.raises(IntelError, match="truncated by paging"):
         enrich(vulns(["CVE-2015-0240"]), cfg, session=Truncating())
 
 

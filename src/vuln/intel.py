@@ -32,8 +32,9 @@ from pathlib import Path
 import requests
 import yaml
 
+from src.utils.disclaimer import DISCLAIMER
+
 ROOT = Path(__file__).resolve().parents[2]
-DISCLAIMER = "资产映射与漏洞数据来自实验环境，仅用于演示"
 EPSS_FIELDS = ["cve", "epss", "percentile", "date", "fetched_at"]
 
 
@@ -53,16 +54,16 @@ def http_get_json(session, url: str, params: dict | None, timeout: float, retrie
         try:
             resp = session.get(url, params=params, timeout=timeout)
             if resp.status_code == 429 or resp.status_code >= 500:
-                last = IntelError(f"{url} 返回 HTTP {resp.status_code}")
+                last = IntelError(f"{url} returned HTTP {resp.status_code}")
             elif resp.status_code != 200:
-                raise IntelError(f"{url} 返回 HTTP {resp.status_code}")
+                raise IntelError(f"{url} returned HTTP {resp.status_code}")
             else:
                 return resp.json()
         except (requests.ConnectionError, requests.Timeout) as e:
             last = e
         if attempt < retries:
             time.sleep(backoff_s * 2 ** attempt)
-    raise IntelError(f"{url} 请求失败（已重试 {retries} 次）：{last}")
+    raise IntelError(f"request to {url} failed (retried {retries} times): {last}")
 
 
 # ---------------------------------------------------------------- KEV
@@ -73,13 +74,13 @@ def load_kev(cfg: dict, session, offline: bool) -> dict:
     fresh = cache.exists() and (time.time() - cache.stat().st_mtime) < cfg["kev_max_age_hours"] * 3600
     if offline or fresh:
         if not cache.exists():
-            raise IntelError(f"离线模式但 KEV 缓存不存在：{cache}")
+            raise IntelError(f"offline mode but the KEV cache does not exist: {cache}")
         return json.loads(cache.read_text(encoding="utf-8"))
 
     data = http_get_json(session, cfg["kev_url"], None, cfg["timeout_s"], cfg["retries"], cfg["backoff_s"])
     missing = {"catalogVersion", "dateReleased", "vulnerabilities"} - set(data)
     if missing:
-        raise IntelError(f"KEV 返回格式异常，缺少字段 {sorted(missing)}")
+        raise IntelError(f"unexpected KEV format, missing fields {sorted(missing)}")
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     return data
@@ -131,16 +132,16 @@ def fetch_epss(cves: list[str], cfg: dict, session) -> dict[str, dict]:
         params = {"cve": ",".join(batch), "limit": len(batch)}
         data = http_get_json(session, cfg["epss_url"], params, cfg["timeout_s"], cfg["retries"], cfg["backoff_s"])
         if data.get("status") != "OK" or "data" not in data:
-            raise IntelError(f"EPSS 返回格式异常：{str(data)[:200]}")
+            raise IntelError(f"unexpected EPSS format: {str(data)[:200]}")
         if int(data.get("total", 0)) > len(data["data"]):
-            raise IntelError(f"EPSS 第 {i} 批结果被分页截断（total={data['total']}）")
+            raise IntelError(f"EPSS batch {i} truncated by paging (total={data['total']})")
         for item in data["data"]:
             cve = item["cve"].strip().upper()
             out[cve] = {"cve": cve, "epss": item["epss"], "percentile": item.get("percentile", ""),
                         "date": item.get("date", ""), "fetched_at": fetched_at}
         for cve in batch:
             out.setdefault(cve, {"cve": cve, "epss": "", "percentile": "", "date": "", "fetched_at": fetched_at})
-        print(f"[EPSS] 第 {i}/{len(batches)} 批：请求 {len(batch)} 个，返回 {len(data['data'])} 个")
+        print(f"[EPSS] batch {i}/{len(batches)}: requested {len(batch)}, returned {len(data['data'])}")
     return out
 
 
@@ -156,11 +157,11 @@ def load_epss(cves: set[str], cfg: dict, session, offline: bool) -> dict[str, di
     todo = sorted(cves - (set(rows) - stale))
     if todo:
         if offline:
-            raise IntelError(f"离线模式但 EPSS 缓存缺少 {len(todo)} 个 CVE（如 {todo[:3]}）")
+            raise IntelError(f"offline mode but the EPSS cache is missing {len(todo)} CVEs (e.g. {todo[:3]})")
         rows.update(fetch_epss(todo, cfg, session))
         write_epss_cache(cache_path, rows)
     else:
-        print(f"[EPSS] {len(cves)} 个 CVE 全部命中缓存")
+        print(f"[EPSS] all {len(cves)} CVEs found in the cache")
     return rows
 
 
@@ -202,23 +203,23 @@ def summarize(out: dict) -> str:
     vs = out["vulns"]
     info = out["intel"]
     lines = [
-        f"漏洞 {len(vs)} 条，涉及 CVE {info['cves_total']} 个；"
-        f"KEV 版本 {info['kev_catalog_version']}，EPSS 日期 {info['epss_dates']}",
-        f"命中 KEV 的漏洞 {sum(v['in_kev'] for v in vs)} 条，KEV CVE {len(info['cves_in_kev'])} 个："
+        f"{len(vs)} vulnerabilities with {info['cves_total']} CVEs; "
+        f"KEV version {info['kev_catalog_version']}, EPSS date {info['epss_dates']}",
+        f"{sum(v['in_kev'] for v in vs)} vulnerabilities in KEV, {len(info['cves_in_kev'])} KEV CVEs: "
         f"{info['cves_in_kev']}",
-        f"EPSS 无记录的 CVE {len(info['cves_without_epss'])} 个",
+        f"{len(info['cves_without_epss'])} CVEs without an EPSS record",
     ]
     for t in (0.0, 0.01, 0.1, 0.5, 0.9):
-        lines.append(f"  epss > {t}: {sum(v['epss'] > t for v in vs)} 条")
+        lines.append(f"  epss > {t}: {sum(v['epss'] > t for v in vs)}")
     return "\n".join(lines)
 
 
 def main() -> int:
     p = argparse.ArgumentParser(description="vulns.json + KEV/EPSS → vulns_enriched.json")
     p.add_argument("--config", type=Path, default=ROOT / "config" / "config.yaml")
-    p.add_argument("--input", type=Path, help="默认取 config.yaml 的 vuln.vulns_json")
-    p.add_argument("--output", type=Path, help="默认取 config.yaml 的 vuln.vulns_enriched_json")
-    p.add_argument("--offline", action="store_true", help="只用 data/intel/ 缓存，不联网")
+    p.add_argument("--input", type=Path, help="defaults to vuln.vulns_json in config.yaml")
+    p.add_argument("--output", type=Path, help="defaults to vuln.vulns_enriched_json in config.yaml")
+    p.add_argument("--offline", action="store_true", help="use only the data/intel/ cache, no network")
     args = p.parse_args()
 
     with open(args.config, encoding="utf-8") as f:
@@ -226,19 +227,19 @@ def main() -> int:
     src = args.input or ROOT / cfg["vuln"]["vulns_json"]
     dst = args.output or ROOT / cfg["vuln"]["vulns_enriched_json"]
     if src.resolve() == dst.resolve():
-        print("[失败] 输出路径与输入相同，不允许覆盖原始解析结果", file=sys.stderr)
+        print("[FAILED] the output path equals the input; overwriting the raw parse result is not allowed", file=sys.stderr)
         return 2
 
     data = json.loads(src.read_text(encoding="utf-8"))
     try:
         out = enrich(data, cfg["intel"], offline=args.offline)
     except IntelError as e:
-        print(f"[失败] {e}", file=sys.stderr)
+        print(f"[FAILED] {e}", file=sys.stderr)
         return 3
 
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[保存] {dst}")
+    print(f"[SAVED] {dst}")
     print(summarize(out))
     return 0
 

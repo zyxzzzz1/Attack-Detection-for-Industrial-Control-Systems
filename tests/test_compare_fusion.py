@@ -18,14 +18,14 @@ def test_compare_reports_changes():
     before = result(None, 0.0, [("A", 1.0), ("B", 0.5)])
     after = result(0.4, 0.4, [("B", 1.2), ("A", 1.0)])
     text = compare(before, after)
-    assert "| hmi_main | 未评估 | 0.400 | 新评估 | not_scanned → scanned |" in text
+    assert "| hmi_main | Not assessed | 0.400 | newly assessed | not_scanned → scanned |" in text
     assert "| P3 | 0.000 | 0.400 | +0.400 | hmi_main |" in text
     assert "| B | 2 → 1 | 0.500 | 1.200 | +0.700 |" in text
-    assert "排序是否变化：是" in text and "[MOCK]" in text and "仅用于演示" in text
+    assert "Ranking changed: yes" in text and "[MOCK]" in text and "for demonstration only" in text
 
 
 def test_compare_no_change_without_mock():
     same = result(None, 0.0, [("A", 1.0)], is_mock=False)
     text = compare(same, same)
-    assert "排序是否变化：否" in text and "[MOCK]" not in text
-    assert "| hmi_main | 未评估 | 未评估 | - |" in text
+    assert "Ranking changed: no" in text and "[MOCK]" not in text
+    assert "| hmi_main | Not assessed | Not assessed | - |" in text

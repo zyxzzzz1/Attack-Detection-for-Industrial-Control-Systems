@@ -116,7 +116,7 @@ with α=0, and by fused priority with α=1 all give precision@10 = 10/10, precis
 ## Repository structure
 
 ```
-config/             config.yaml (paths and parameters), asset_map.yaml, fusion.yaml, cluster.yaml, i18n_en.yaml
+config/             config.yaml (paths and parameters), asset_map.yaml, fusion.yaml, cluster.yaml
 src/data/           HAI loading, preprocessing, sliding windows (never reads labels)
 src/models/         LSTM-AE, LSTM-VAE, Deep SVDD, PCA, IsolationForest
 src/eval/           labels (the only place labels are read), segments, metrics, alarms, fusion_ranking
@@ -267,9 +267,8 @@ OpenVAS was run only against self-built virtual machines on an isolated host-onl
 
 - **Commit hashes.** The commit hashes in `run_manifest.json` files and in `PROGRESS.md` refer to a private
   development repository. They do not exist in this public repository's history.
-- **Language.** Some internal documents (`PROGRESS.md`, `docs/`, the remaining tables and notes under `reports/`) and the code comments are
-  in Chinese. The Streamlit app, alert cards, case study and figures are in English by default (`ui.lang` in
-  `config/config.yaml`; set `UI_LANG=zh` for Chinese). The display language changes text only, never a number.
+- **Language.** The code, comments, generated reports, Streamlit app, alert cards and figures are in English.
+  Some internal documents (`PROGRESS.md`, most of `docs/`, the `*.zh.md` files) are in Chinese.
 - **AI-assisted development.** This project was developed with AI assistance (Claude Code). `docs/cluster_queue.md`
   and `docs/cluster_runbook.md` refer to this workflow. Research design, evaluation methodology and conclusions are my
   own.

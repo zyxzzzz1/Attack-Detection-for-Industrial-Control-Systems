@@ -40,14 +40,14 @@ def apply_overrides(cfg: dict, overrides: list[str]) -> dict:
     out = copy.deepcopy(cfg)
     for item in overrides:
         if "=" not in item:
-            raise ValueError(f"覆盖项必须写成 key=value：{item!r}")
+            raise ValueError(f"overrides must be written as key=value: {item!r}")
         key, value = item.split("=", 1)
         node = out
         parts = key.strip().split(".")
         for part in parts[:-1]:
             node = node.setdefault(part, {})
             if not isinstance(node, dict):
-                raise ValueError(f"{key} 的上级 {part} 不是字典，无法覆盖")
+                raise ValueError(f"the parent {part} of {key} is not a dict and cannot be overridden")
         node[parts[-1]] = yaml.safe_load(value)
     return out
 

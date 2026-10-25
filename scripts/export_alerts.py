@@ -37,7 +37,7 @@ def build_alerts(run, model: str, merge_gap_s: int, k: int) -> list[dict]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="导出真实报警 alerts.json（LSTM-AE）")
+    p = argparse.ArgumentParser(description="Export the real alerts alerts.json (LSTM-AE)")
     add_common_args(p)
     args = p.parse_args(argv)
     cfg = load_config(args.config)
@@ -47,14 +47,14 @@ def main(argv: list[str] | None = None) -> int:
     src.banner()
     if not src.usable_runs([model], required=("scores_test.npy", "per_sensor_err_test.npy", "threshold.json",
                                               "test_index.json")):
-        print("[错误] 没有可用于导出的运行", file=sys.stderr)
+        print("[ERROR] no run available for export", file=sys.stderr)
         return 1
     run = load_run(src.root / model, per_sensor=True)
     alerts = build_alerts(run, model, ml["eval"]["merge_gap_s"], ml["alerts"]["top_k"])
     out = src.out / "alerts.json" if args.smoke else resolve(ml["alerts"]["output"])
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(alerts, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"[保存] {out}（{len(alerts)} 条报警，模型 {model}，阈值 {run.threshold['threshold']:.6g}，is_mock=false）")
+    print(f"[SAVED] {out} ({len(alerts)} alerts, model {model}, threshold {run.threshold['threshold']:.6g}, is_mock=false)")
     return 0
 
 

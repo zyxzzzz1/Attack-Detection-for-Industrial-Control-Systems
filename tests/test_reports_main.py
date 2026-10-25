@@ -286,7 +286,7 @@ def test_scripts_on_smoke_artifacts_write_only_to_smoke_reports(workspace):
 
     ab = pd.read_csv(out / "ablation.csv")
     assert ab[["window", "hidden"]].values.tolist() == [[12, 4], [20, 8]] and ab["is_main_config"].tolist() == [False, False]
-    assert "缺少的组合（2 个）" in (out / "ablation.md").read_text(encoding="utf-8")
+    assert "Missing combinations (2)" in (out / "ablation.md").read_text(encoding="utf-8")
     q = pd.read_csv(out / "ablation_quantiles.csv")
     assert sorted(q["quantile"].unique()) == [0.99, 0.995, 0.999] and len(q) == 6
 
@@ -301,7 +301,7 @@ def test_official_mode_rejects_smoke_artifacts(workspace, capsys):
     base = ["--config", str(config)]
     assert make_figures.main(base) == 0 and attribution.main(base) == 0 and make_ablation_report.main(base) == 0
     assert export_alerts.main(base) == 1
-    assert "冒烟测试的产物" in capsys.readouterr().out
+    assert "smoke-test artifacts" in capsys.readouterr().out
     assert not list((root / "report").iterdir()) and not (root / "official_alerts.json").exists()
 
 
@@ -338,13 +338,13 @@ def test_main_report_seed_study_mean_and_std(tmp_path, monkeypatch, capsys):
 
     args = ["--models", "iforest", "lstm_ae", "--output-dir", str(out)]
     assert make_main_report.main(args) == 0  # One seed missing
-    assert "还不完整" in capsys.readouterr().out and not (out / "main_results_seeds.csv").exists()
+    assert "is incomplete" in capsys.readouterr().out and not (out / "main_results_seeds.csv").exists()
     assert "±" not in (out / "main_results.md").read_text(encoding="utf-8")
 
     last = study["seeds"][-1]
     _fake_run(root, f"seeds/lstm_ae_s{last}", "lstm_ae", last, [f"ml.seed={last}", "ml.window.length=30"], f1s[-1], 0.9)
     assert make_main_report.main(args) == 0  # An extra override: not the same configuration
-    assert "覆盖项不符" in capsys.readouterr().out and not (out / "main_results_seeds.csv").exists()
+    assert "overrides do not match" in capsys.readouterr().out and not (out / "main_results_seeds.csv").exists()
 
     manifest = root / f"seeds/lstm_ae_s{last}" / "run_manifest.json"
     manifest.write_text(json.dumps({**json.loads(manifest.read_text()), "overrides": [f"ml.seed={last}"]}))
@@ -353,7 +353,7 @@ def test_main_report_seed_study_mean_and_std(tmp_path, monkeypatch, capsys):
     expected = f"{np.mean(f1s):.4f} ± {np.std(f1s, ddof=1):.4f}"
     line = next(x for x in md.splitlines() if x.startswith("| lstm_ae |"))
     assert expected in line and "0.9000 ± 0.0000" in line
-    assert "±" not in next(x for x in md.splitlines() if x.startswith("| iforest |")) and "单个种子" in md
+    assert "±" not in next(x for x in md.splitlines() if x.startswith("| iforest |")) and "single seed only" in md
     # The csv main table is unchanged: still the seed-42 run, with the same columns
     table = pd.read_csv(out / "main_results.csv")
     assert list(table.columns) == make_main_report.MAIN_COLUMNS
@@ -393,9 +393,9 @@ def test_event_first_segment_rule_and_duration_groups():
     assert 0 < full["event_first_hit_rate_ci_low"] < 1 and full["subsystem_hit_rate_ci_high"] <= 1
 
     assert [attribution.duration_group(d, [10, 60]) for d in (1, 9, 10, 60, 61)] == \
-        ["<10 秒", "<10 秒", "10–60 秒", "10–60 秒", ">60 秒"]
+        ["<10 s", "<10 s", "10–60 s", "10–60 s", ">60 s"]
     groups = attribution.by_duration(rows, [10, 60])
-    assert [g["duration_group"] for g in groups] == ["<10 秒", "10–60 秒", ">60 秒"]
+    assert [g["duration_group"] for g in groups] == ["<10 s", "10–60 s", ">60 s"]
     assert sum(g["n"] for g in groups) == summary["n_evaluable"] and np.isnan(groups[2]["rate"])
 
 
@@ -436,7 +436,7 @@ def test_fusion_ranking_eval_precision_at_k_and_alignment():
 def test_fusion_ranking_module_does_not_read_labels():
     """The fusion ranking evaluation is not on the label whitelist: the ground truth may only come from eval_alarms.csv written by evaluate."""
     text = (ROOT / "src" / "eval" / "fusion_ranking.py").read_text(encoding="utf-8")
-    assert "eval_alarms.csv" in text and "labels" not in text.replace("标签", "")
+    assert "eval_alarms.csv" in text and "labels" not in text
 
 
 # ---------- I1: case selection ----------
@@ -457,42 +457,21 @@ def test_case_rules_and_observations():
               2: (NS(event_subsystems="P1"), alert(50, 23.0, {"P1": 0.7, "P4": 0.3})),
               3: (NS(event_subsystems=float("nan")), alert(28, 2.2, {"P1": 1.0}))}
     text = "\n".join(make_cases.observations(picked))
-    assert "70% 的权重放在 P1" in text and "封顶" in text and "同一台已扫描的资产（ews_01）" in text and "P4" in text
+    assert "70% of the weight on P1" in text and "capped at 1" in text and "the same scanned asset (ews_01)" in text and "P4" in text
     # When the false alarm ranks after the real attacks and the vulnerabilities come from different assets, the corresponding two observations do not appear
     picked[3] = (picked[3][0], alert(60, 2.2, {"P1": 1.0}, asset="hmi_main"))
     text = "\n".join(make_cases.observations(picked))
-    assert "封顶" not in text and "同一台" not in text
+    assert "capped at 1" not in text and "the same scanned asset" not in text
     assert make_cases.observations({}) == []
 
 
 # ---------- R1: key numbers ----------
 
-def test_key_numbers_match_source_tables_and_progress_copy():
-    """The detection numbers in key_numbers.zh.md match the main table; the key numbers at the top of PROGRESS.md are a verbatim copy (the two may not diverge)."""
-    report = ROOT / load_config()["ml"]["report_dir"]
-    text = (report / "key_numbers.zh.md").read_text(encoding="utf-8")
-    main = pd.read_csv(report / "main_results.csv")
-    for row in main.itertuples():
-        assert f"{row.model}：precision {row.precision:.4f}，recall {row.recall:.4f}，F1 {row.f1:.4f}，AUROC {row.auroc:.4f}" in text
-    seeds = pd.read_csv(report / "main_results_seeds.csv").set_index("seed")
-    for col in ("f1", "auroc", "event_recall"):
-        assert f"{seeds.loc['mean', col]:.4f} ± {seeds.loc['std', col]:.4f}" in text
-    assert f"{seeds.loc['mean', 'false_alarms_per_hour']:.2f} ± {seeds.loc['std', 'false_alarms_per_hour']:.2f}" in text
-    md = (report / "main_results.md").read_text(encoding="utf-8")
-    line = next(x for x in md.splitlines() if x.startswith("| lstm_ae |"))
-    assert line.count("±") == 4                      # That row of the main table: F1, AUROC, event recall, false-alarm rate
-    for group in ("### 检测", "### 归因", "### 融合", "### 数据问题"):
-        assert group in text
-    assert "不使用 point-adjust" in text and "事后分析，不替换主结果" in text
-    assert text in (ROOT / "PROGRESS.md").read_text(encoding="utf-8")
-
-
-def test_key_numbers_english_matches_source_files_and_chinese_version():
-    """English key_numbers.md: numbers match the source files; line-by-line correspondence with the Chinese version, with exactly the same numbers in each line; no Chinese mixed in."""
+def test_key_numbers_match_source_files():
+    """key_numbers.md: numbers match the source files; the LSTM-AE row of the main table shows mean ± std; no Chinese."""
     import re
     report = ROOT / load_config()["ml"]["report_dir"]
     en = (report / "key_numbers.md").read_text(encoding="utf-8")
-    zh = (report / "key_numbers.zh.md").read_text(encoding="utf-8")
 
     # Matches the source files: main table, seed table, attribution summary, fusion ranking, evaluation results of each run
     main = pd.read_csv(report / "main_results.csv")
@@ -516,19 +495,15 @@ def test_key_numbers_english_matches_source_files_and_chinese_version():
     abl = pd.read_csv(report / "ablation.csv")
     assert f"F1 {abl.f1.min():.3f}–{abl.f1.max():.3f}, AUROC {abl.auroc.min():.3f}–{abl.auroc.max():.3f}" in en
 
-    # Line-by-line correspondence with the Chinese version: the numbers in a line (including those in file and config names) are identical as multisets
-    number = re.compile(r"\d+(?:[.,]\d+)*")
-    en_lines, zh_lines = en.splitlines(), zh.splitlines()
-    assert len(en_lines) == len(zh_lines)
-    rows = [(a, b) for a, b in zip(en_lines, zh_lines) if a.startswith("| ") or b.startswith("| ")]
-    assert len(rows) > 40
-    for a, b in rows:
-        assert sorted(number.findall(a)) == sorted(number.findall(b)), a
+    md = (report / "main_results.md").read_text(encoding="utf-8")
+    line = next(x for x in md.splitlines() if x.startswith("| lstm_ae |"))
+    assert line.count("±") == 4                      # That row of the main table: F1, AUROC, event recall, false-alarm rate
+    assert sum(x.startswith("| ") for x in en.splitlines()) > 40
 
     for group in ("### Detection", "### Attribution", "### Fusion", "### Data issues"):
         assert group in en
     assert "No point-adjust" in en and "Post-hoc analysis, does not replace the main results" in en
-    assert not re.search(r"[\u4e00-\u9fff，；：（）、]", en)
+    assert not re.search("[%s-%s%s-%s%s-%s]" % tuple(map(chr, (0x3000, 0x303F, 0x4E00, 0x9FFF, 0xFF00, 0xFFEF))), en)
 
 
 # ---------- R1: tracked copies of each run (reports/main/runs/) ----------
@@ -548,8 +523,7 @@ def test_run_snapshots_are_official_and_key_numbers_reproducible():
     for name in names:
         assert report_problem(runs / name) is None, name
         assert (runs / name / "eval_metrics.json").exists() and (runs / name / "threshold.json").exists()
-    for lang, name in make_key_numbers.OUTPUTS.items():
-        assert make_key_numbers.build(cfg, lang) == (ROOT / cfg["ml"]["report_dir"] / name).read_text(encoding="utf-8")
+    assert make_key_numbers.build(cfg) == (ROOT / cfg["ml"]["report_dir"] / make_key_numbers.OUTPUT).read_text(encoding="utf-8")
     assert not [p for p in runs.rglob("*") if p.is_file() and p.name not in snapshot_runs.FILES]  # No large files or logs
 
 
@@ -602,7 +576,7 @@ def test_run_snapshots_match_originals_in_artifact_dir():
         for f in snapshot_runs.FILES:
             original, copy = root / name / f, runs / name / f
             if not original.exists():
-                assert not copy.exists() or not (root / name).exists(), f"{name}/{f}: 入库副本没有对应的原件"
+                assert not copy.exists() or not (root / name).exists(), f"{name}/{f}: the tracked copy has no matching original"
                 continue
             assert copy.read_bytes() == snapshot_runs.redacted(original, rules).encode("utf-8"), f"{name}/{f}"
             if f != "run_manifest.json":
@@ -614,50 +588,39 @@ def test_run_snapshots_match_originals_in_artifact_dir():
                 assert snapshot_runs.scrub_nodes(a) == b and a["git_commit"] == b["git_commit"] and a["stages"] == b["stages"]
             checked += 1
     if checked == 0:
-        pytest.skip("产物目录中没有原件（artifacts/ 不入库），无法核对")
+        pytest.skip("no originals in the artifact directory (artifacts/ is not tracked), cannot compare")
     assert checked == 88 and identical == 70
 
 
-# ---------- Localization: identical values in figures and tables in both display languages ----------
+# ---------- Figures and tables are English only ----------
 
-def test_figures_and_tables_identical_between_languages(workspace, monkeypatch):
-    """Generate all figures and tables from the same smoke artifacts once in Chinese and once in English: csv / json are byte-identical (only the text on the figures differs);
-    the numbers in the figure text are identical; English figures contain no Chinese, Chinese figures do."""
-    import hashlib
+def test_figures_and_tables_contain_no_chinese(workspace, monkeypatch):
+    """Generate all figures and tables from the smoke artifacts: no Chinese in the figure text or in the csv / json / md outputs."""
     import re
-    from collections import Counter
 
     from matplotlib.figure import Figure
     from matplotlib.text import Text
 
-    from src.utils import i18n
     root, config = workspace
     out = root / "art" / "smoke_reports"
     base = ["--config", str(config), "--smoke"]
-    captured: dict[str, list[str]] = {}
+    captured: list[str] = []
     original = Figure.savefig
 
     def recording_savefig(fig, path, *a, **k):
-        texts = [x.get_text() for x in fig.findobj(Text) if x.get_text().strip()]
-        captured.setdefault(lang, []).extend([f"## {getattr(path, 'name', path)}", *texts])
+        captured.extend(x.get_text() for x in fig.findobj(Text) if x.get_text().strip())
         return original(fig, path, *a, **k)
 
     monkeypatch.setattr(Figure, "savefig", recording_savefig)
-    digests = {}
-    for lang in ("zh", "en"):
-        monkeypatch.setenv(i18n.ENV_VAR, lang)
-        assert make_figures.main([*base, "--models", "pca", "lstm_ae"]) == 0
-        assert attribution.main([*base, "--models", "pca", "lstm_ae"]) == 0
-        assert make_ablation_report.main(base) == 0
-        # The .md files are Chinese documents outside the localization scope, but their content must not vary with the display language either
-        digests[lang] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
-                         for p in sorted(out.iterdir()) if p.suffix in (".csv", ".json", ".md")}
-        assert all(p.stat().st_size > 0 for p in out.glob("*.png"))
-    assert digests["zh"] == digests["en"] and len(digests["en"]) >= 8
-    num = re.compile(r"\d+(?:\.\d+)?")
+    assert make_figures.main([*base, "--models", "pca", "lstm_ae"]) == 0
+    assert attribution.main([*base, "--models", "pca", "lstm_ae"]) == 0
+    assert make_ablation_report.main(base) == 0
+    assert all(p.stat().st_size > 0 for p in out.glob("*.png"))
     cjk = re.compile(r"[\u4e00-\u9fff]")
-    zh, en = "\n".join(captured["zh"]), "\n".join(captured["en"])
-    assert len(captured["zh"]) == len(captured["en"]) > 50          # The same number of text objects
-    assert Counter(num.findall(zh)) == Counter(num.findall(en))      # Ticks, cell values and numbers in titles are all identical
-    assert cjk.search(zh) and not cjk.search(en), cjk.findall(en)[:10]
-    assert "Anomaly score" in en and "Training curves" in en and "smoke-test data" in en and "Point-wise F1" in en
+    text = "\n".join(captured)
+    assert len(captured) > 50 and not cjk.search(text), cjk.findall(text)[:10]
+    files = [p for p in sorted(out.iterdir()) if p.suffix in (".csv", ".json", ".md")]
+    assert len(files) >= 8
+    for p in files:
+        assert not cjk.search(p.read_text(encoding="utf-8")), p.name
+    assert "Anomaly score" in text and "Training curves" in text and "smoke-test data" in text and "Point-wise F1" in text

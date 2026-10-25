@@ -12,17 +12,17 @@ cluster:
   ssh_alias: minerva
   login_host: minerva.cse.chalmers.se
   # Reachable only from the Chalmers network or VPN
-  network: Chalmers 网络或 VPN
-  cid: TODO 写在 config/cluster.local.yaml    # Chalmers CID (login user name)
+  network: Chalmers network or VPN
+  cid: TODO set in config/cluster.local.yaml    # Chalmers CID (login user name)
   os: Ubuntu 24.04
   python: python3              # System python3 is 3.12
 
 paths:
   # Absolute paths on the cluster: real values go in config/cluster.local.yaml (actual layout: three sibling directories under home: code, data, artifacts)
-  code_dir: TODO 写在 config/cluster.local.yaml      # Code directory (target of push_to_cluster.sh)
-  venv_dir: TODO 写在 config/cluster.local.yaml      # Virtualenv directory, by convention <code_dir>/.venv
-  data_dir: TODO 写在 config/cluster.local.yaml      # HAI data directory (train1.csv.gz etc. directly inside) -> HAI_DATA_DIR
-  artifact_dir: TODO 写在 config/cluster.local.yaml  # Artifact root directory -> ARTIFACT_DIR; slurm logs go to its slurm_logs/
+  code_dir: TODO set in config/cluster.local.yaml      # Code directory (target of push_to_cluster.sh)
+  venv_dir: TODO set in config/cluster.local.yaml      # Virtualenv directory, by convention <code_dir>/.venv
+  data_dir: TODO set in config/cluster.local.yaml      # HAI data directory (train1.csv.gz etc. directly inside) -> HAI_DATA_DIR
+  artifact_dir: TODO set in config/cluster.local.yaml  # Artifact root directory -> ARTIFACT_DIR; slurm logs go to its slurm_logs/
 
 partitions:
   default:
@@ -38,12 +38,12 @@ gpus:
   L40s: {memory_gb: 48, count: 8}
 
 storage:
-  home_quota: 无用户级配额（quota 无输出）；home 为 /data/users/<CID>，/data 全体共享 59T，2026-10-08 剩 2.8T（已用 96%）  # home quota
-  scratch: 无单独的 scratch（没有 /scratch、/local，TMPDIR 未设置）；数据和产物都放 /data/users/<CID> 下  # Whether scratch exists, its path and purge policy
+  home_quota: no per-user quota (quota prints nothing); home is /data/users/<CID>, /data is shared by everyone at 59T, 2.8T free on 2026-10-08 (96% used)  # home quota
+  scratch: no separate scratch (no /scratch or /local, TMPDIR not set); data and artifacts all go under /data/users/<CID>  # Whether scratch exists, its path and purge policy
 
 network:
   compute_nodes_internet: true # Whether compute nodes have internet access (decides whether data verification uses --offline)
-  cuda_driver: 驱动 595.71.05（2026-10-08 读自 /proc/driver/nvidia/version；CUDA 13.0 要求驱动 580 及以上，满足，用 PyPI 默认的 torch wheel）  # CUDA version supported by the driver (decides the CUDA build of torch, see env/README.md)
+  cuda_driver: driver 595.71.05 (read from /proc/driver/nvidia/version on 2026-10-08; CUDA 13.0 requires driver 580 or later, satisfied, so the default torch wheel from PyPI is used)  # CUDA version supported by the driver (decides the CUDA build of torch, see env/README.md)
 
 code_transfer: rsync           # Confirmed (2026-10-07): scripts/push_to_cluster.sh, pushes only git-tracked files
 

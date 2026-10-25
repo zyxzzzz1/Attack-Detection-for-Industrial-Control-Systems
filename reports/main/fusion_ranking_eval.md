@@ -1,14 +1,14 @@
-# 融合排序评估
+# Fusion ranking evaluation
 
-lstm_ae 的 1703 条报警中有 72 条与攻击事件重叠（基准比例 0.0423，即随机排序时 precision@k 的期望）。precision@k 是排在前 k 条的报警中与攻击事件重叠的比例，ci_low / ci_high 为 95% Wilson 置信区间。
+72 of the 1703 alerts of lstm_ae are true alarms (base rate 0.0423, the expected precision@k of a random ranking). precision@k is the fraction of the top k alerts that are true alarms; ci_low / ci_high are 95% Wilson confidence intervals.
 
-- raw_score：按报警段内的最大异常分数排序。
-- alpha=0：融合优先级，不使用漏洞暴露风险（只有异常严重度 S 与子系统关键度）。
-- alpha=1：融合优先级，使用漏洞暴露风险 E_sub（默认参数）。
+- raw_score: ranked by the maximum anomaly score within the alarm segment.
+- alpha=0: fusion priority without the vulnerability exposure risk (only anomaly severity S and subsystem criticality).
+- alpha=1: fusion priority with the vulnerability exposure risk E_sub (default parameters).
 
-异常严重度 S = min(1, 最大分数 ÷ 阈值 − 1) 在分数达到阈值的 2 倍时封顶：61 条报警的 S = 1。这些报警在融合排序里只靠子系统的权重、关键度和 E_sub 区分；n_tied_with_kth 是与第 k 条优先级完全相同的报警条数，并列时按报警编号（时间顺序）排。n_shared_with_raw_score 是前 k 条中同时也在原始分数排序前 k 条里的报警条数（precision 相同不代表选出的是同一批报警）。
+The anomaly severity S = min(1, max score ÷ threshold − 1) is capped once the score reaches twice the threshold: 61 alerts have S = 1. In the fusion ranking these alerts are distinguished only by subsystem weight, criticality and E_sub; n_tied_with_kth is the number of alerts with exactly the same priority as the k-th, and ties are broken by alert ID (time order). n_shared_with_raw_score is the number of alerts in the top k that are also in the top k of the raw-score ranking (equal precision does not mean the same alerts were selected).
 
-**局限（约束 7）**：资产映射是人为构造的，漏洞数据来自实验靶机，与 HAI 中的攻击没有因果关系。本表只描述这套排序公式在这份数据上的表现，不说明漏洞上下文能提升检测能力；融合部分不声称提升检测指标。
+**Limitation (constraint 7)**: the asset mapping is constructed by hand and the vulnerability data come from lab targets, with no causal link to the intrusions in HAI. This table only describes how this ranking formula behaves on this data; it does not show that vulnerability context improves detection, and the fusion part claims no improvement of detection metrics.
 
 | ranking | k | n_true | precision | ci_low | ci_high | n_alerts | n_true_total | base_rate | n_tied_with_kth | n_shared_with_raw_score |
 |---|---|---|---|---|---|---|---|---|---|---|

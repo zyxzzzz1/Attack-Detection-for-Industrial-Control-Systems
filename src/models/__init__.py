@@ -21,7 +21,7 @@ MODEL_CLASSES = {"pca": PCAModel, "iforest": IForestModel, "lstm_ae": LSTMAEMode
 
 def build_model(name: str, cfg: dict):
     if name not in MODEL_CLASSES:
-        raise NotImplementedError(f"模型 {name} 尚未实现（已实现：{', '.join(MODEL_CLASSES)}）")
+        raise NotImplementedError(f"model {name} is not implemented (implemented: {', '.join(MODEL_CLASSES)})")
     return MODEL_CLASSES[name](cfg)
 
 

@@ -97,9 +97,9 @@ def load_params(path: Path) -> dict:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="计算资产风险 R_asset 与子系统暴露风险 E_sub")
+    p = argparse.ArgumentParser(description="Compute asset risk R_asset and subsystem exposure risk E_sub")
     p.add_argument("--config", type=Path, default=ROOT / "config" / "config.yaml")
-    p.add_argument("--vulns", type=Path, help="默认取 config.yaml 的 vuln.vulns_enriched_json")
+    p.add_argument("--vulns", type=Path, help="defaults to vuln.vulns_enriched_json in config.yaml")
     args = p.parse_args()
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
@@ -108,14 +108,14 @@ def main() -> int:
     src = args.vulns or ROOT / cfg["vuln"]["vulns_enriched_json"]
     risk = compute_risk(json.loads(src.read_text(encoding="utf-8"))["vulns"], graph, params)
 
-    print(f"参与计算的漏洞 {len(risk['vulns'])} 条（min_qod={params['min_qod']}），"
-          f"needs_review {len(risk['needs_review'])} 条，未映射 IP {risk['unmapped_ips']}")
+    print(f"{len(risk['vulns'])} vulnerabilities used (min_qod={params['min_qod']}), "
+          f"needs_review {len(risk['needs_review'])}, unmapped IPs {risk['unmapped_ips']}")
     for aid, a in risk["assets"].items():
-        r = "未评估" if a["R_asset"] is None else f"{a['R_asset']:.3f}"
-        print(f"  {aid:<10} R_asset={r:<6} {a['status']:<11} 漏洞 {a['n_vulns']}，"
-              f"需核实 {a['n_needs_review']}")
+        r = "Not assessed" if a["R_asset"] is None else f"{a['R_asset']:.3f}"
+        print(f"  {aid:<10} R_asset={r:<6} {a['status']:<11} vulns {a['n_vulns']}, "
+              f"needs review {a['n_needs_review']}")
     for sid, s in risk["subsystems"].items():
-        print(f"  {sid}  E_sub={s['E_sub']:.3f}  来自 {s['max_asset']}")
+        print(f"  {sid}  E_sub={s['E_sub']:.3f}  from {s['max_asset']}")
     return 0
 
 

@@ -19,15 +19,15 @@ def run(ctx) -> dict:
     if ctx.resume and model.exists(ctx.directory):
         model.load(ctx.directory)
         ctx.state["model"] = model
-        ctx.log.info("运行目录里已有训练好的模型，直接读取，不重新训练")
+        ctx.log.info("the run directory already has a trained model; loading it instead of retraining")
         previous = ctx.manifest.data.get("stages", {}).get("train", {})  # Keep the summary of the previous training
         return {**{k: v for k, v in previous.items() if k not in ("seconds", "finished_at")}, "resumed": True}
     summary = model.fit(ctx.dataset("train"), ctx.dataset("val_es")) or {}
     model.save(ctx.directory)
     ctx.state["model"] = model
-    ctx.log.info("训练完成：%s", summary)
+    ctx.log.info("training done: %s", summary)
     return {"resumed": False, **summary}
 
 
 if __name__ == "__main__":
-    sys.exit(stage_cli("prepare,train", "训练一个模型"))
+    sys.exit(stage_cli("prepare,train", "Train one model"))

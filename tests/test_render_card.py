@@ -23,7 +23,7 @@ def meta():
     alerts = [alert("A-P1", 2.0, [("P1_FT03", 0.7), ("P1_LIT01", 0.3)]),
               alert("A-P4", 1.5, [("P4_ST_PT01", 0.8), ("P9_UNK", 0.2)]),
               alert("A-P3", 1.01, [("P3_LIT01", 1.0)])]
-    alerts[0]["mock_case"] = "单子系统"
+    alerts[0]["mock_case"] = "single subsystem"
     return prioritize(alerts, vs, g, PARAMS)
 
 
@@ -46,32 +46,32 @@ def test_files_written(rendered):
 @pytest.mark.parametrize("ext", ["md", "html"])
 def test_card_contains_all_m10_fields(rendered, ext):
     t = read(rendered, f"01_A-P1.{ext}")
-    for s in ["A-P1", "2020-07-15 10:00:00", "2020-07-15 10:00:59", "1 分",   # ID, start/end, duration
+    for s in ["A-P1", "2020-07-15 10:00:00", "2020-07-15 10:00:59", "1 min",   # ID, start/end, duration
               "0.2000", "0.1000",                                          # Score / threshold
               "P1_FT03", "70.0%",                                          # Top-k and shares
-              "P1 锅炉", "0.9",                                            # Subsystems and criticality
+              "P1 Boiler", "0.9",                                            # Subsystems and criticality
               "hist → hmi → plc_p1", "ews_a → plc_p1",                     # Intrusion paths
               "KEV", "CVE-2000-0001",                                      # KEV mark on vulnerabilities
-              "优先排查资产", "修复建议", "fix",                           # Recommended actions and remediation
-              "第 1", "[MOCK]", "单子系统", DISCLAIMER]:
-        assert s in t, f"{ext} 卡片缺少 {s!r}"
+              "Investigate these assets first", "OpenVAS remediation advice", "fix",   # Recommended actions and remediation
+              "rank 1", "[MOCK]", "single subsystem", DISCLAIMER]:
+        assert s in t, f"{ext} card is missing {s!r}"
     assert t.count(DISCLAIMER) >= 2  # Header and footer
 
 
 @pytest.mark.parametrize("ext", ["md", "html"])
 def test_needs_review_block(rendered, ext):
-    assert "需人工核实" in read(rendered, f"01_A-P1.{ext}")
+    assert "Needs manual verification" in read(rendered, f"01_A-P1.{ext}")
     assert "LowQoD KEV" in read(rendered, f"01_A-P1.{ext}")
     # P3's upstream does not include ews_a, so nothing needs verification
     p3 = read(rendered, f"03_A-P3.{ext}")
-    assert "LowQoD KEV" not in p3 and "未评估（未扫描）的资产" in p3
+    assert "LowQoD KEV" not in p3 and "have not been assessed (not scanned)" in p3
 
 
 @pytest.mark.parametrize("ext", ["md", "html"])
 def test_p4_note_and_unmapped(rendered, ext):
     t = read(rendered, f"02_A-P4.{ext}")
-    assert "HIL 说明" in t and "P9_UNK" in t and "未知前缀" in t
-    assert "没有挂接控制链" in t
+    assert "HIL note" in t and "P9_UNK" in t and "Unknown prefix" in t
+    assert "no control chain attached" in t
 
 
 def test_html_escapes_and_md_pipes(rendered):
@@ -105,13 +105,13 @@ def test_actions_dedup_fixes(meta):
     a = meta["alerts"][0]
     acts = build_actions(a)
     assert len(acts["fixes"]) == 1  # The remediation text of both vulnerabilities is "fix"
-    assert acts["steps"][0].startswith("优先排查资产：ews_a")
+    assert acts["steps"][0].startswith("Investigate these assets first: ews_a")
 
 
 def test_helpers():
-    assert fmt_duration(1) == "1 秒"
-    assert fmt_duration(180) == "3 分"
-    assert fmt_duration(3725) == "1 小时 2 分 5 秒"
+    assert fmt_duration(1) == "1 s"
+    assert fmt_duration(180) == "3 min"
+    assert fmt_duration(3725) == "1 h 2 min 5 s"
     assert md_cell("a|b\nc") == "a\\|b c"
 
 
@@ -128,14 +128,14 @@ def test_tie_break_kev_then_cvss():
 @pytest.mark.parametrize("ext", ["md", "html"])
 def test_unassessed_shown_not_zero(rendered, ext):
     t = read(rendered, f"01_A-P1.{ext}")
-    assert "该路径存在未评估资产，实际风险可能被低估" in t
-    assert "可能被低估" in t
-    # hmi is unscanned: shows "未评估" (not assessed), not 0.000
+    assert "This path contains assets that have not been assessed; the actual risk may be underestimated" in t
+    assert "may be underestimated" in t
+    # hmi is unscanned: shows "Not assessed" (not assessed), not 0.000
     row = next(line for line in t.splitlines() if re.search(r"(\| |<td>)hmi( \||</td>)", line))
-    assert "未评估" in row and "0.000" not in row
-    assert "另有 2 个上游资产未评估" in t
+    assert "Not assessed" in row and "0.000" not in row
+    assert "2 more upstream assets not assessed" in t
     idx = read(rendered, f"index.{ext}")
-    assert "可能低估" in idx
+    assert "Possibly underestimated" in idx
 
 
 @pytest.mark.parametrize("ext", ["md", "html"])
@@ -147,15 +147,15 @@ def test_subsystem_all_unassessed_and_no_assets(tmp_path, ext):
     meta = prioritize([alert("A", 1.5, [("P1_X", 0.5), ("P4_Y", 0.5)])], [], g, PARAMS)
     render_all(meta, make_env(ROOT / "templates"), tmp_path, [ext])
     t = read(tmp_path, f"01_A.{ext}")
-    assert "E_sub 未评估（上游资产均未扫描，按 0 计算）" in t
-    assert "E_sub = 0.000（无控制链：HIL 仿真）" in t and "无关联资产" not in t
-    # All path assets unscanned: E_sub shows "未评估" (not assessed), not "可能被低估" (may be underestimated) (the warning sentence is still there)
+    assert "E_sub not assessed (no upstream asset has been scanned; counted as 0)" in t
+    assert "E_sub = 0.000 (no control chain: HIL simulation)" in t and "no associated assets" not in t
+    # All path assets unscanned: E_sub shows "Not assessed" (not assessed), not "Possibly underestimated" (may be underestimated) (the warning sentence is still there)
     assert exposure(meta["alerts"][0]) == "not_assessed"
-    assert ("0.000（未评估：上游资产均未扫描）" if ext == "md" else "未评估：上游资产均未扫描</span>") in t
-    assert "（可能被低估）" not in t and "可能被低估</span>" not in t
+    assert ("0.000 (not assessed: no upstream asset scanned)" if ext == "md" else "Not assessed: no upstream asset scanned</span>") in t
+    assert " (possibly underestimated)" not in t and "Possibly underestimated</span>" not in t
     idx = read(tmp_path, f"index.{ext}")
-    assert ("0.000（未评估：上游资产均未扫描）" if ext == "md" else "未评估：上游资产均未扫描</span>") in idx
-    assert "（可能低估）" not in idx and "可能低估</span>" not in idx
+    assert ("0.000 (not assessed: no upstream asset scanned)" if ext == "md" else "Not assessed: no upstream asset scanned</span>") in idx
+    assert " (possibly underestimated)" not in idx and "Possibly underestimated</span>" not in idx
 
 
 def test_no_underestimate_banner_when_all_assessed(tmp_path):
@@ -166,23 +166,23 @@ def test_no_underestimate_banner_when_all_assessed(tmp_path):
     meta = prioritize([alert("A", 1.5, [("P1_X", 1.0)])], [], g, PARAMS)
     render_all(meta, make_env(ROOT / "templates"), tmp_path, ["md", "html"])
     for name in ("01_A.md", "01_A.html"):
-        assert "可能被低估" not in read(tmp_path, name)
+        assert "Possibly underestimated" not in read(tmp_path, name)
 
 
 @pytest.mark.parametrize("ext", ["md", "html"])
 def test_index_columns_tie_rule_and_exposure_text(rendered, meta, ext):
-    """Index page: a "score / threshold" (multiple) column before S; the tie-breaking rule is stated; partially unscanned assets show "可能低估" (may be underestimated),
+    """Index page: a "score / threshold" (multiple) column before S; the tie-breaking rule is stated; partially unscanned assets show "Possibly underestimated" (may be underestimated),
     and those without upstream assets (P4) get no mark."""
     idx = read(rendered, f"index.{ext}")
     head = next(line for line in idx.splitlines() if "Priority" in line and "E_sub" in line)
-    assert head.index("Priority") < head.index("分数 / 阈值") < head.index("S<" if ext == "html" else "| S |")
-    assert "需核实的 KEV 漏洞" in head and "priority" not in head
+    assert head.index("Priority") < head.index("Score / threshold") < head.index("S<" if ext == "html" else "| S |")
+    assert "KEV vulns needing review" in head and "priority" not in head
     row = next(line for line in idx.splitlines() if "A-P1" in line) if ext == "md" else idx
     assert "2.00" in row and "1.50" in idx and "1.01" in idx
-    assert "Priority 相同时按 S 降序，仍相同时按告警编号升序" in idx
+    assert "Alerts with equal Priority are ordered by S, descending, and then by alert ID, ascending" in idx
     by_id = {a["alert_id"]: a for a in meta["alerts"]}
     assert [exposure(by_id[k]) for k in ("A-P1", "A-P4", "A-P3")] == ["partial", "assessed", "partial"]
-    assert idx.count("（可能低估）" if ext == "md" else "可能低估</span>") == 2
+    assert idx.count(" (possibly underestimated)" if ext == "md" else "Possibly underestimated</span>") == 2
 
 
 def test_tie_order_is_s_then_alert_id():

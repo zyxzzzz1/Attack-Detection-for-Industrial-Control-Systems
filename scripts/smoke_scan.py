@@ -39,19 +39,19 @@ FINISHED = {"Done", "Stopped", "Interrupted"}
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="OpenVAS 冒烟扫描（默认只预检）")
+    p = argparse.ArgumentParser(description="OpenVAS smoke scan (pre-check only by default)")
     p.add_argument("--config", type=Path, default=ROOT / "config" / "config.yaml")
     p.add_argument("--asset-map", type=Path, default=ROOT / "config" / "asset_map.yaml")
-    p.add_argument("--asset", default="ews_01", help="asset_map 中的资产名")
+    p.add_argument("--asset", default="ews_01", help="asset name in asset_map")
     p.add_argument("--scan-config", default="Full and fast")
     p.add_argument("--scanner", default="OpenVAS Default")
     p.add_argument("--port-list", default="All IANA assigned TCP")
     p.add_argument("--output", type=Path, default=ROOT / "data" / "samples" / "smoke_report.xml")
-    p.add_argument("--poll", type=int, default=30, help="轮询间隔（秒）")
-    p.add_argument("--timeout", type=int, default=4 * 3600, help="最长等待时间（秒）")
-    p.add_argument("--execute", action="store_true", help="真正创建并启动扫描")
-    p.add_argument("--yes", action="store_true", help="--execute 时跳过交互确认")
-    p.add_argument("--report-id", help="只导出指定报告，不创建任何对象")
+    p.add_argument("--poll", type=int, default=30, help="polling interval (s)")
+    p.add_argument("--timeout", type=int, default=4 * 3600, help="maximum waiting time (s)")
+    p.add_argument("--execute", action="store_true", help="actually create and start the scan")
+    p.add_argument("--yes", action="store_true", help="skip the interactive confirmation with --execute")
+    p.add_argument("--report-id", help="only export the given report, creating nothing")
     return p.parse_args()
 
 
@@ -64,14 +64,14 @@ def resolve_host(args: argparse.Namespace, cfg: dict) -> str:
     """Get the target IP from asset_map and verify the scanned flag and the lab subnet. Exit on failure."""
     asset = load_yaml(args.asset_map).get("assets", {}).get(args.asset)
     if not asset:
-        sys.exit(f"[停止] asset_map 中没有资产 {args.asset}")
+        sys.exit(f"[STOP] asset_map has no asset {args.asset}")
     if not asset.get("scanned") or not asset.get("ip"):
-        sys.exit(f"[停止] 资产 {args.asset} 未标记 scanned: true 或没有 IP")
+        sys.exit(f"[STOP] asset {args.asset} is not marked scanned: true or has no IP")
     subnet = ipaddress.ip_network(cfg["gvm"]["lab_subnet"])
     ip = ipaddress.ip_address(asset["ip"])
     if ip not in subnet:
-        sys.exit(f"[停止] {ip} 不在实验网段 {subnet} 内")
-    print(f"[通过] {args.asset} = {ip}，位于实验网段 {subnet} 内")
+        sys.exit(f"[STOP] {ip} is not inside the lab subnet {subnet}")
+    print(f"[OK] {args.asset} = {ip}, inside the lab subnet {subnet}")
     return str(ip)
 
 
@@ -80,7 +80,7 @@ def find_id(response, tag: str, name: str) -> str:
     for el in response.findall(tag):
         if el.findtext("name") == name:
             return el.get("id")
-    sys.exit(f"[停止] 找不到名为 “{name}” 的 {tag}")
+    sys.exit(f"[STOP] no {tag} named \"{name}\"")
 
 
 def wait_for_task(gmp, task_id: str, poll_s: int, timeout_s: int) -> str:
@@ -95,7 +95,7 @@ def wait_for_task(gmp, task_id: str, poll_s: int, timeout_s: int) -> str:
         if status in FINISHED:
             return status
         if elapsed > timeout_s:
-            print(f"[警告] 超过 {timeout_s}s 仍未结束，停止等待（扫描仍在 gvmd 中继续）")
+            print(f"[WARN] not finished after {timeout_s}s, stopped waiting (the scan continues in gvmd)")
             return status
         time.sleep(poll_s)
 
@@ -114,12 +114,12 @@ def export_report(gmp, report_id: str, xml_format_id: str, output: Path) -> bool
     n = len(response.findall(".//results/result"))
     full = response.findtext(".//report/report/result_count/full")
     filtered = response.findtext(".//report/report/result_count/filtered")
-    print(f"[保存] 报告 {report_id} → {output}（导出 {n} 条，filtered={filtered}，full={full}）")
+    print(f"[SAVED] report {report_id} → {output} ({n} exported, filtered={filtered}, full={full})")
     # The filter allows all levels and QoD, so the three counts should agree; a mismatch means results were filtered or truncated by paging
     if str(n) == filtered == full:
-        print("[通过] 导出条数与报告总数一致")
+        print("[OK] exported count matches the report total")
         return True
-    print("[失败] 导出条数与报告总数不一致，报告不完整，请检查 REPORT_FILTER")
+    print("[FAIL] exported count does not match the report total; the report is incomplete, check REPORT_FILTER")
     return False
 
 
@@ -128,7 +128,7 @@ def main() -> int:
     cfg = load_yaml(args.config)
     user, password = os.environ.get("GVM_USER"), os.environ.get("GVM_PASSWORD")
     if not user or not password:
-        sys.exit("[停止] 未设置 GVM_USER / GVM_PASSWORD")
+        sys.exit("[STOP] GVM_USER / GVM_PASSWORD not set")
 
     host = None if args.report_id else resolve_host(args, cfg)
     connection = UnixSocketConnection(path=cfg["gvm"]["socket_path"], timeout=120)
@@ -148,51 +148,51 @@ def main() -> int:
             target_name = f"{NAME_PREFIX}{args.asset}_{stamp}"
             task_name = f"{NAME_PREFIX}{args.asset}_{stamp}"
 
-            print("\n将要执行的步骤：")
+            print("\nSteps to be executed:")
             print(f"  1. create_target  name={target_name}  hosts=[{host}]")
             print(f"                    port_list={args.port_list} ({port_list_id})")
             print(f"  2. create_task    name={task_name}")
             print(f"                    config={args.scan_config} ({config_id})")
             print(f"                    scanner={args.scanner} ({scanner_id})")
             print("  3. start_task")
-            print(f"  4. 每 {args.poll}s 轮询 get_task，直到 Done/Stopped/Interrupted（最长 {args.timeout}s）")
-            print(f"  5. get_report（XML {xml_format_id}，filter “{REPORT_FILTER}”）→ {args.output}")
+            print(f"  4. poll get_task every {args.poll}s until Done/Stopped/Interrupted (at most {args.timeout}s)")
+            print(f"  5. get_report (XML {xml_format_id}, filter '{REPORT_FILTER}') → {args.output}")
 
             if not args.execute:
-                print("\n[预检完成] 未创建任何对象。确认无误后加 --execute 运行。")
+                print("\n[PRE-CHECK DONE] nothing created. Add --execute to run once everything looks right.")
                 return 0
-            if not args.yes and input("\n输入 yes 开始执行：").strip() != "yes":
-                print("[已取消] 未创建任何对象。")
+            if not args.yes and input("\nType yes to start: ").strip() != "yes":
+                print("[CANCELLED] nothing created.")
                 return 0
 
             target_id = gmp.create_target(
                 target_name,
                 hosts=[host],
                 port_list_id=port_list_id,
-                comment="冒烟测试，可删除",
+                comment="smoke test, safe to delete",
             ).get("id")
-            print(f"[创建] target {target_name} ({target_id})")
+            print(f"[CREATED] target {target_name} ({target_id})")
             task_id = gmp.create_task(
-                task_name, config_id, target_id, scanner_id, comment="冒烟测试，可删除"
+                task_name, config_id, target_id, scanner_id, comment="smoke test, safe to delete"
             ).get("id")
-            print(f"[创建] task {task_name} ({task_id})")
+            print(f"[CREATED] task {task_name} ({task_id})")
             report_id = gmp.start_task(task_id).findtext("report_id")
-            print(f"[启动] report_id={report_id}（中途 Ctrl+C 不会停止扫描，可稍后用 --report-id 导出）")
+            print(f"[STARTED] report_id={report_id} (Ctrl+C does not stop the scan; export later with --report-id)")
 
             try:
                 status = wait_for_task(gmp, task_id, args.poll, args.timeout)
             except KeyboardInterrupt:
-                print(f"\n[中断] 停止轮询。扫描仍在继续：task={task_id} report={report_id}")
+                print(f"\n[INTERRUPTED] stopped polling. The scan continues: task={task_id} report={report_id}")
                 return 130
 
             if not export_report(gmp, report_id, xml_format_id, args.output):
                 return 4
             if status != "Done":
-                print(f"[警告] 任务最终状态为 {status}，报告可能不完整")
+                print(f"[WARN] final task status is {status}, the report may be incomplete")
                 return 3
             return 0
     except GvmError as e:
-        print(f"[失败] GMP 错误：{e}")
+        print(f"[FAIL] GMP error: {e}")
         return 1
 
 

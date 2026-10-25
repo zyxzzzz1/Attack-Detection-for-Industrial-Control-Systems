@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 class WindowDataset(Dataset):
     def __init__(self, segments: list[np.ndarray], window: int, stride: int) -> None:
         if window < 1 or stride < 1:
-            raise ValueError("window 与 stride 必须为正整数")
+            raise ValueError("window and stride must be positive integers")
         self.segments = [np.ascontiguousarray(s, dtype=np.float32) for s in segments]
         self.window, self.stride = window, stride
         # Number of windows per segment; segments shorter than one window have none
@@ -33,7 +33,7 @@ class WindowDataset(Dataset):
         """Window index -> (segment index, start row of the window within the segment)."""
         idx = np.asarray(idx, dtype=np.int64)
         if len(idx) and (idx.min() < 0 or idx.max() >= len(self)):
-            raise IndexError("窗口编号越界")
+            raise IndexError("window index out of range")
         seg = np.searchsorted(self.offsets, idx, side="right") - 1
         return seg, (idx - self.offsets[seg]) * self.stride
 
@@ -66,7 +66,7 @@ class WindowDataset(Dataset):
         """
         values = np.asarray(values)
         if len(values) != len(self):
-            raise ValueError(f"values 长度 {len(values)} 与窗口数 {len(self)} 不一致")
+            raise ValueError(f"values length {len(values)} does not match the number of windows {len(self)}")
         seg, start = self.locate(np.arange(len(self)))
         out = []
         for s, x in enumerate(self.segments):

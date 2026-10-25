@@ -78,7 +78,7 @@ def test_rerun_keeps_snapshot_if_unchanged(cfg, tmp_path, real_cves):
 
 
 def test_offline_without_cache_fails(cfg):
-    with pytest.raises(IntelError, match="离线模式"):
+    with pytest.raises(IntelError, match="offline mode"):
         run(cfg, offline=True, mock=True)
 
 
@@ -123,9 +123,9 @@ def test_real_alerts_are_default_and_only_top_n_rendered(cfg, tmp_path, real_cve
     cards = sorted(p.name for p in (tmp_path / "real" / "cards").iterdir())
     assert len(cards) == 4 and cards[-1] == "index.md" and cards[0].startswith("01_LSTMAE-")
     index = (tmp_path / "real" / "cards" / "index.md").read_text(encoding="utf-8")
-    assert f"共 {len(real)} 条报警" in index and "前 3 条" in index and "MOCK" not in index and "包含误报" in index
+    assert f"{len(real)} alerts in total" in index and "only the 3 with the highest priority" in index and "MOCK" not in index and "include false alarms" in index
     card = (tmp_path / "real" / "cards" / cards[0]).read_text(encoding="utf-8")
-    assert f"优先级第 1 / {len(real)}" in card and "占全部传感器误差的比例" in card and "仅用于演示" in card
+    assert f"priority rank 1 / {len(real)}" in card and "Share of total sensor error" in card and "for demonstration only" in card
 
     # Run again with a smaller N: the extra cards from the previous run are removed
     cfg["fusion"]["max_rendered_alerts"] = 1

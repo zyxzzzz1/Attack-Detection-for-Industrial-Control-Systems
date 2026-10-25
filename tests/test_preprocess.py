@@ -66,7 +66,7 @@ def test_reader_drops_time_and_label_columns(cfg):
 def test_reader_rejects_file_with_missing_seconds(tmp_path):
     df = pd.DataFrame({"time": ["2020-01-01 00:00:00", "2020-01-01 00:00:01", "2020-01-01 00:00:05"], "P1_A": [1, 2, 3]})
     df.to_csv(tmp_path / "gap.csv", index=False)
-    with pytest.raises(ValueError, match="逐秒连续"):
+    with pytest.raises(ValueError, match="contiguous per second"):
         read_segment(tmp_path / "gap.csv", "time", LABELS, "train")
 
 
@@ -109,7 +109,7 @@ def test_windows_never_cross_any_boundary(cfg, stride):
         for i in range(len(ds)):
             gid = ds[i][:, 0].numpy()
             assert gid.shape == (W,)
-            assert (np.diff(gid) == 1).all(), f"{split} 窗口 {i} 跨越了边界"
+            assert (np.diff(gid) == 1).all(), f"{split} window {i} crosses a boundary"
             assert any(set(gid.tolist()) <= a for a in allowed)
         seen[split] = {g for i in range(len(ds)) for g in ds[i][:, 0].tolist()}
     # Windows of the three parts never share a row
@@ -221,7 +221,7 @@ def test_preprocessor_roundtrip_and_nan_rejected(cfg, tmp_path):
     raw = load_test_segments(cfg)[0]
     assert (loaded.transform(raw).x == data.pre.transform(raw).x).all()
     raw.x[3, 0] = np.nan
-    with pytest.raises(ValueError, match="缺失"):
+    with pytest.raises(ValueError, match="missing values"):
         loaded.transform(raw)
 
 
@@ -272,7 +272,7 @@ def real_hashes():
     return test, cfg_off
 
 
-@pytest.mark.skipif(not HAVE_REAL, reason="没有完整的 HAI 数据")
+@pytest.mark.skipif(not HAVE_REAL, reason="full HAI data not available")
 def test_real_training_windows_contain_no_test_rows(real_hashes):
     """By content hash (ignoring timestamps): no window of train / val_es / val_thr contains any row of any test file,
     in particular the first 43,201 seconds of test3."""
@@ -288,8 +288,8 @@ def test_real_training_windows_contain_no_test_rows(real_hashes):
         assert len(ds) > 0
         for s, x in zip(segs, ds.segments):  # Windows are sliced only from these arrays, so checking row by row covers all windows
             h = hash_rows(pd.DataFrame(x))
-            assert not np.isin(h, test3_head).any(), f"{split}/{s.name} 含 test3 前 43,201 秒的行"
-            assert not np.isin(h, all_test).any(), f"{split}/{s.name} 含 test 文件的行"
+            assert not np.isin(h, test3_head).any(), f"{split}/{s.name} contains rows from the first 43,201 s of test3"
+            assert not np.isin(h, all_test).any(), f"{split}/{s.name} contains rows of a test file"
             total += len(h)
     assert total == 921603 - 43201 - 1
     assert raw["train"][0].start_row == 1 and len(raw["train"][0]) == 216001 - 43201 - 1
@@ -301,7 +301,7 @@ def test_real_training_windows_contain_no_test_rows(real_hashes):
     assert int(np.isin(h, all_test).sum()) == 43202
 
 
-@pytest.mark.skipif(not HAVE_REAL, reason="没有完整的 HAI 数据")
+@pytest.mark.skipif(not HAVE_REAL, reason="full HAI data not available")
 def test_real_split_sizes_and_features():
     data = prepare_train(REAL)
     rows = data.summary()["rows"]

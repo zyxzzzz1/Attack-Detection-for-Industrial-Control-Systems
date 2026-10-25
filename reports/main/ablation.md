@@ -1,6 +1,6 @@
-# LSTM-AE 消融
+# LSTM-AE ablation
 
-窗口长度 W × 隐层大小 hidden。主模型配置（is_main_config）事先固定，本表只用于敏感性分析，不据此修改主模型，也不据此选阈值。指标口径与主结果表相同（不使用 point-adjust）。
+Window length W × hidden size. The main-model configuration (is_main_config) was fixed in advance; this table is only for sensitivity analysis, and is used neither to change the main model nor to choose the threshold. Metric definitions are the same as in the main results table (no point-adjust).
 
 | window | hidden | is_main_config | precision | recall | f1 | auroc | event_recall | delay_median_s | delay_mean_s | false_alarms_per_hour | threshold | n_unscored | final_epoch | best_epoch | early_stop_epoch | epoch_seconds_mean | n_parameters |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -14,9 +14,9 @@
 | 120 | 64 | False | 0.5022 | 0.7913 | 0.6145 | 0.9462 | 0.9600 | 14.0000 | 26.6042 | 0.5137 | 0.3280 | 595 | 50 | 46 | — | 2.4376 | 68473 |
 | 120 | 128 | False | 0.1494 | 0.8600 | 0.2546 | 0.9387 | 1.0000 | 6.5000 | 15.4600 | 20.0977 | 0.2651 | 595 | 50 | 45 | 50.0000 | 5.1744 | 235193 |
 
-## 阈值分位的敏感性
+## Threshold-quantile sensitivity
 
-用 val_thr 分数的其他分位数作阈值重算同一套指标（AUROC 与阈值无关，不重复列出）。
+The same metrics recomputed with other quantiles of the val_thr scores as the threshold (AUROC does not depend on the threshold and is not repeated).
 
 | window | hidden | quantile | threshold | precision | recall | f1 | event_recall | delay_median_s | false_alarms_per_hour |
 |---|---|---|---|---|---|---|---|---|---|

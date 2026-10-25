@@ -23,13 +23,12 @@ import pandas as pd
 from src.eval.run_io import read_json
 from src.utils.paths import load_config
 from src.utils.plotstyle import INK, SEQUENTIAL, SURFACE, apply_style, plt
-from src.utils.i18n import t
 from src.utils.reporting import ReportSource, add_common_args
 from src.utils.run import MANIFEST_NAME, ablation_grid
 
 METRICS = ["precision", "recall", "f1", "auroc", "event_recall", "delay_median_s", "delay_mean_s",
            "false_alarms_per_hour", "threshold", "n_unscored"]
-HEATMAP_METRICS = [("f1", "逐点 F1"), ("auroc", "AUROC"), ("event_recall", "事件检出率")]  # Titles are Chinese source text, passed through t() when plotting
+HEATMAP_METRICS = [("f1", "Point-wise F1"), ("auroc", "AUROC"), ("event_recall", "Event detection rate")]
 
 
 def collect(src: ReportSource, cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
@@ -45,7 +44,7 @@ def collect(src: ReportSource, cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame, l
         metrics, manifest = read_json(d / "eval_metrics.json"), read_json(d / MANIFEST_NAME)
         hp = manifest["hyperparameters"]
         if hp["window"]["length"] != g["window"] or hp["models"][main["ablation"]["model"]]["hidden"] != g["hidden"]:
-            raise ValueError(f"{g['run_name']} 的 manifest 超参数与目录名不符")
+            raise ValueError(f"the manifest hyperparameters of {g['run_name']} do not match the directory name")
         train = manifest.get("stages", {}).get("train", {})
         is_main = g["window"] == main["window"]["length"] and g["hidden"] == main["models"]["lstm_ae"]["hidden"]
         rows.append({"index": g["index"], "window": g["window"], "hidden": g["hidden"], "is_main_config": is_main,
@@ -88,10 +87,10 @@ def plot_heatmaps(df: pd.DataFrame, windows: list[int], hiddens: list[int], path
         for s in ax.spines.values():
             s.set_visible(False)
         ax.set_xlabel("hidden")
-        ax.set_title(t(title), loc="left", fontsize=10)
+        ax.set_title(title, loc="left", fontsize=10)
         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    axes[0, 0].set_ylabel(t("窗口长度 W（秒）"))
-    fig.suptitle(t("LSTM-AE 消融（黑框 = 事先固定的主模型配置）") + f"{t('（冒烟数据，仅检查流程）') if smoke else ''}",
+    axes[0, 0].set_ylabel("Window length W (s)")
+    fig.suptitle("LSTM-AE ablation (black frame = main model configuration fixed in advance)" + f"{' (smoke-test data, pipeline check only)' if smoke else ''}",
                  x=0.01, ha="left", fontsize=11)
     fig.tight_layout()
     fig.savefig(path)
@@ -109,21 +108,21 @@ def to_md(df: pd.DataFrame, qdf: pd.DataFrame, missing: list[str], smoke: bool) 
         return ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)] + \
                ["| " + " | ".join(cell(v) for v in row) + " |" for row in frame.itertuples(index=False)]
 
-    lines = ["# LSTM-AE 消融" + ("（冒烟数据，仅检查流程，不得引用）" if smoke else ""), "",
-             "窗口长度 W × 隐层大小 hidden。主模型配置（is_main_config）事先固定，本表只用于敏感性分析，"
-             "不据此修改主模型，也不据此选阈值。指标口径与主结果表相同（不使用 point-adjust）。", ""]
-    lines += table(df.drop(columns=["index"])) if len(df) else ["（没有可用的组合）"]
+    lines = ["# LSTM-AE ablation" + (" (smoke-test data, pipeline check only, do not cite)" if smoke else ""), "",
+             "Window length W × hidden size. The main-model configuration (is_main_config) was fixed in advance; this table is only for sensitivity analysis, "
+             "and is used neither to change the main model nor to choose the threshold. Metric definitions are the same as in the main results table (no point-adjust).", ""]
+    lines += table(df.drop(columns=["index"])) if len(df) else ["(no combinations available)"]
     if missing:
-        lines += ["", f"缺少的组合（{len(missing)} 个）：" + "、".join(missing)]
+        lines += ["", f"Missing combinations ({len(missing)}): " + ", ".join(missing)]
     if len(qdf):
-        lines += ["", "## 阈值分位的敏感性", "",
-                  "用 val_thr 分数的其他分位数作阈值重算同一套指标（AUROC 与阈值无关，不重复列出）。", ""]
+        lines += ["", "## Threshold-quantile sensitivity", "",
+                  "The same metrics recomputed with other quantiles of the val_thr scores as the threshold (AUROC does not depend on the threshold and is not repeated).", ""]
         lines += table(qdf)
     return "\n".join(lines) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="M4：LSTM-AE 消融汇总")
+    p = argparse.ArgumentParser(description="M4: LSTM-AE ablation summary")
     add_common_args(p)
     args = p.parse_args(argv)
     cfg = load_config(args.config)
@@ -131,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     src.banner()
     df, qdf, missing = collect(src, cfg)
     if df.empty:
-        print("[提示] 没有可用的消融运行，未生成结果")
+        print("[INFO] no ablation runs available, nothing generated")
         return 0
     ab = cfg["ml"]["ablation"]
     df.to_csv(src.out / "ablation.csv", index=False)
@@ -139,8 +138,8 @@ def main(argv: list[str] | None = None) -> int:
         qdf.to_csv(src.out / "ablation_quantiles.csv", index=False)
     (src.out / "ablation.md").write_text(to_md(df, qdf, missing, args.smoke), encoding="utf-8")
     plot_heatmaps(df, ab["windows"], ab["hiddens"], src.out / "ablation_heatmap.png", args.smoke)
-    print(f"[生成] {src.out}：ablation.csv / .md、ablation_heatmap.png（{len(df)} 个组合"
-          f"{'，缺 ' + str(len(missing)) + ' 个' if missing else ''}）")
+    print(f"[GENERATED] {src.out}: ablation.csv / .md, ablation_heatmap.png ({len(df)} combinations"
+          f"{', ' + str(len(missing)) + ' missing' if missing else ''})")
     return 0
 
 

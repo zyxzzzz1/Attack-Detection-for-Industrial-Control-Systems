@@ -18,15 +18,15 @@ PARAMS = {"alpha": 1.0, "beta": 1.0, "gamma": 1.5, "min_qod": 70, "max_vulns_per
 def amap_dict() -> dict:
     return {
         "subsystems": {
-            "P1": {"name": "锅炉", "criticality": 0.9, "sensor_prefix": "P1_", "assets": ["plc_p1", "hmi", "ews_a"]},
-            "P3": {"name": "水处理", "criticality": 0.5, "sensor_prefix": "P3_", "assets": ["plc_p3", "hmi", "ews_b"]},
-            "P4": {"name": "HIL", "criticality": 0.6, "sensor_prefix": "P4_", "assets": [], "note": "HIL 说明"},
+            "P1": {"name": "Boiler", "criticality": 0.9, "sensor_prefix": "P1_", "assets": ["plc_p1", "hmi", "ews_a"]},
+            "P3": {"name": "Water treatment", "criticality": 0.5, "sensor_prefix": "P3_", "assets": ["plc_p3", "hmi", "ews_b"]},
+            "P4": {"name": "HIL", "criticality": 0.6, "sensor_prefix": "P4_", "assets": [], "note": "HIL note"},
         },
         "assets": {
-            "ews_a": {"role": "工程师站", "purdue_level": 2, "ip": "192.168.56.11", "scanned": True},
-            "ews_b": {"role": "工程师站", "purdue_level": 2, "ip": "192.168.56.12", "scanned": True},
+            "ews_a": {"role": "Engineering workstation", "purdue_level": 2, "ip": "192.168.56.11", "scanned": True},
+            "ews_b": {"role": "Engineering workstation", "purdue_level": 2, "ip": "192.168.56.12", "scanned": True},
             "hmi": {"role": "HMI", "purdue_level": 2, "ip": None, "scanned": False},
-            "hist": {"role": "历史服务器", "purdue_level": 3, "ip": "192.168.56.30", "scanned": True},
+            "hist": {"role": "Historian", "purdue_level": 3, "ip": "192.168.56.30", "scanned": True},
             "plc_p1": {"role": "PLC", "purdue_level": 1, "ip": None, "scanned": False},
             "plc_p3": {"role": "PLC", "purdue_level": 1, "ip": None, "scanned": False},
         },
@@ -75,7 +75,7 @@ def test_validation_rejects_bad_refs():
 def test_validation_scanned_needs_ip():
     d = amap_dict()
     d["assets"]["hmi"]["scanned"] = True
-    with pytest.raises(ValidationError, match="必须有 ip"):
+    with pytest.raises(ValidationError, match="must have an ip"):
         AssetMap.model_validate(d)
 
 
@@ -220,7 +220,7 @@ def test_all_unknown_sensors_gives_zero_priority(graph):
 def test_p4_note_and_no_assets(graph):
     out = prioritize([alert("A", 1.5, [("P4_ST_PT01", 1.0)])], [vuln("192.168.56.11", 9.0)], graph, PARAMS)
     a = out["alerts"][0]
-    assert a["subsystems"][0]["note"] == "HIL 说明"
+    assert a["subsystems"][0]["note"] == "HIL note"
     assert a["E_sub"] == 0.0 and a["vulns"] == [] and a["path"] == []
     assert a["priority"] == pytest.approx(0.5 * 1 * 0.6)
 
@@ -248,7 +248,7 @@ def test_mock_alerts_use_real_sensors():
     assert len(sensors) == 79
     alerts = build_alerts(sensors)
     assert len(alerts) == 5 and all(a["is_mock"] is True for a in alerts)
-    with pytest.raises(ValueError, match="不存在的传感器"):
+    with pytest.raises(ValueError, match="do not exist in HAI"):
         build_alerts(sensors - {"P1_FT03"})
     # The saved mock file matches the generated output
     saved = json.loads((ROOT / "data" / "mock" / "alerts.json").read_text(encoding="utf-8"))
@@ -258,5 +258,5 @@ def test_mock_alerts_use_real_sensors():
 def test_end_before_start_rejected(graph):
     a = alert("A", 1.5, [("P1_X", 1.0)])
     a["end"] = "2020-07-15 09:59:59"
-    with pytest.raises(ValueError, match="早于 start"):
+    with pytest.raises(ValueError, match="earlier than start"):
         prioritize([a], [], graph, PARAMS)

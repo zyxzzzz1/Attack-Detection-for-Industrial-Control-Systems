@@ -5,34 +5,34 @@
 
 subsystems:
   P1:
-    name: 锅炉过程
+    name: Boiler process
     criticality: 0.9          # 0~1, business criticality
     sensor_prefix: "P1_"
     assets: [plc_p1, hmi_main, ews_01]
   P2:
-    name: 汽轮机过程
+    name: Turbine process
     criticality: 1.0
     sensor_prefix: "P2_"
     assets: [plc_p2, hmi_main, ews_01]
   P3:
-    name: 水处理过程
+    name: Water treatment process
     criticality: 0.7
     sensor_prefix: "P3_"
     assets: [plc_p3, hmi_main, ews_02]
   P4:
-    name: HIL 仿真
+    name: HIL simulation
     criticality: 0.6
     sensor_prefix: "P4_"
     # In HAI 21.03, P4 is a HIL simulation (official description: simulated steam-turbine power generation and pumped-storage hydropower); it has no separate controller and no attack_P4 label.
     # Hence no assets are attached and E_sub is always 0; the note is shown verbatim under "inferred affected subsystems" on the alert cards.
     assets: []
-    note: "P4 为 HIL 仿真子系统,无独立控制链;它与 P1、P2、P3 都有物理耦合(P3 的泵和阀由 HIL 中的抽水蓄能发电模型控制),其异常可能由 P1/P2/P3 的攻击经物理耦合传导而来,建议同时排查 P1/P2/P3 相关资产。"
+    note: "P4 is the HIL simulation subsystem and has no control chain of its own. It is physically coupled with P1, P2 and P3 (the pump and valve of P3 are controlled by the pumped-storage hydropower generation model in the HIL); its anomalies may be caused by attacks on P1/P2/P3 propagating through physical coupling, so the assets related to P1/P2/P3 should be investigated as well."
 
 assets:
-  ews_01:    {role: 工程师站,   purdue_level: 2, ip: 192.168.56.11, scanned: true}   # Metasploitable2 target
-  ews_02:    {role: 工程师站,   purdue_level: 2, ip: null, scanned: false}           # No target VM yet
+  ews_01:    {role: Engineering workstation,   purdue_level: 2, ip: 192.168.56.11, scanned: true}   # Metasploitable2 target
+  ews_02:    {role: Engineering workstation,   purdue_level: 2, ip: null, scanned: false}           # No target VM yet
   hmi_main:  {role: HMI,        purdue_level: 2, ip: null, scanned: false}           # No target VM yet
-  historian: {role: 历史服务器, purdue_level: 3, ip: null, scanned: false}           # No target VM yet
+  historian: {role: Historian, purdue_level: 3, ip: null, scanned: false}           # No target VM yet
   plc_p1:    {role: PLC,        purdue_level: 1, ip: null, scanned: false}           # PLCs are not actively scanned in OT practice
   plc_p2:    {role: PLC,        purdue_level: 1, ip: null, scanned: false}
   plc_p3:    {role: PLC,        purdue_level: 1, ip: null, scanned: false}

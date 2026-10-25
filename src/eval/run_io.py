@@ -31,7 +31,7 @@ def load_run(directory: Path, per_sensor: bool = False) -> RunArtifacts:
     d = Path(directory)
     err_path = d / "per_sensor_err_test.npy"
     if per_sensor and not err_path.exists():
-        raise FileNotFoundError(f"{d} 没有 per_sensor_err_test.npy（只有重构类模型输出逐传感器误差）")
+        raise FileNotFoundError(f"{d} has no per_sensor_err_test.npy (only reconstruction models produce per-sensor errors)")
     return RunArtifacts(directory=d, manifest=read_json(d / MANIFEST_NAME), index=read_json(d / "test_index.json"),
                         threshold=read_json(d / "threshold.json"), scores=np.load(d / "scores_test.npy"),
                         per_sensor_err=np.load(err_path, mmap_mode="r") if per_sensor else None)

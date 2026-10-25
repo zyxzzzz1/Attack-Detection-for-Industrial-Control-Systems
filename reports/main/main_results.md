@@ -1,10 +1,10 @@
-# 主结果表
+# Main results
 
-数字全部来自集群上的完整运行。阈值 = val_thr 分数的 99% 分位数；逐点指标**不使用 point-adjust**，因此逐点 F1 偏低是预期结果。
+All numbers come from full runs on the cluster. Threshold = 99% quantile of the val_thr scores; point-wise metrics **do not use point-adjust**, so a low point-wise F1 is expected.
 
-每个测试文件的前 W−1 秒没有分数，不参与任何指标，数量见 n_unscored 列。检测延迟只统计检出的事件；误报率 = 不与任何攻击事件重叠的报警段数 ÷ 正常时长（小时，只计已打分且无攻击的秒）。
+The first W−1 seconds of each test file have no score and are excluded from every metric; their number is in the n_unscored column. Detection delay counts only detected events; false-alarm rate = alarm segments overlapping no attack event ÷ normal duration (hours, counting only scored seconds without attack).
 
-指标约定：报警规则为分数 > 阈值；没有报警时 precision 记为 —（NaN），此时若评估范围内有攻击，recall 与 F1 记 0；AUROC 只依赖分数、与阈值无关，只有评估范围内全是同一类标签时才无法定义。
+Metric conventions: alarm rule is score > threshold; with no alarms precision is shown as — (NaN), and if there are attacks within the evaluation range recall and F1 are 0; AUROC depends only on the scores, not on the threshold, and is undefined only when all labels within the evaluation range are of one class.
 
 | model | precision | recall | f1 | auroc | event_recall | delay_median_s | delay_mean_s | false_alarms_per_hour | threshold | n_unscored |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -14,9 +14,9 @@
 | lstm_vae | 0.0606 | 0.8111 | 0.1128 | 0.8800 | 0.9600 | 4.0 | 16.8 | 21.2189 | 0.279032 | 295 |
 | deep_svdd | 0.1683 | 0.8287 | 0.2797 | 0.9055 | 0.9800 | 3.0 | 13.9 | 69.3304 | 0.000078 | 295 |
 
-## 随机种子
+## Random seeds
 
-lstm_ae 一行的 f1、auroc、event_recall、false_alarms_per_hour 是 5 个随机种子（42, 43, 44, 45, 46）的均值 ± 样本标准差（ddof=1）；该行其余各列来自种子 42 的主模型运行（这次运行的 f1 0.4115、auroc 0.9339、event_recall 1.0000、false_alarms_per_hour 14.9495），报警导出、归因和图也只用这一次运行。各种子的运行除种子外配置完全相同，阈值各自按自己的 val_thr 99% 分位数计算。**其余模型都只有单个种子的结果**，它们的随机波动没有评估。
+In the lstm_ae row, f1, auroc, event_recall, false_alarms_per_hour are the mean ± sample std (ddof=1) over 5 random seeds (42, 43, 44, 45, 46); the other columns of that row come from the main-model run with seed 42 (that run's f1 0.4115, auroc 0.9339, event_recall 1.0000, false_alarms_per_hour 14.9495); alert export, attribution and figures also use only that run. The seed runs have identical configurations apart from the seed, and each threshold is the 99% quantile of its own val_thr. **All other models have results for a single seed only**; their random variation was not assessed.
 
 | seed | run_name | precision | recall | f1 | auroc | event_recall | delay_median_s | delay_mean_s | false_alarms_per_hour | threshold | n_unscored |
 |---|---|---|---|---|---|---|---|---|---|---|---|

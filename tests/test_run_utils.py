@@ -139,7 +139,7 @@ def test_run_model_prepare_writes_manifest_scaler_and_log(tiny_data):
     assert m["hyperparameters"]["data"]["drop_train_overlap"] is False
     assert m["stages"]["prepare"]["rows"] == {"train": 960, "val_es": 120, "val_thr": 120}
     assert m["stages"]["prepare"]["n_features"] == 2
-    assert "阶段 prepare 完成" in (d / "run.log").read_text(encoding="utf-8")
+    assert "stage prepare done" in (d / "run.log").read_text(encoding="utf-8")
 
 
 def test_run_model_ablation_index_sets_run_name_and_overrides(tiny_data):
@@ -155,7 +155,7 @@ def test_run_model_ablation_index_sets_run_name_and_overrides(tiny_data):
 
 def test_run_model_failure_is_recorded_in_manifest(tiny_data):
     # Window longer than every segment: the prepare stage fails and the manifest records failed
-    with pytest.raises(RuntimeError, match="窗口"):
+    with pytest.raises(RuntimeError, match="windows"):
         run_model.main(["--model", "pca", "--set", "ml.data.drop_train_overlap=false", "--set", "ml.window.length=5000"])
     m = json.loads((tiny_data / "pca" / "run_manifest.json").read_text(encoding="utf-8"))
     assert m["status"] == "failed" and m["segments"][-1]["status"] == "failed"

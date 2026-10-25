@@ -1,74 +1,74 @@
 {% extends "_base.html.j2" %}
-{% block title %}{{ _("告警 {id}").format(id=a.alert_id) }}{% endblock %}
+{% block title %}{{ "Alert {id}".format(id=a.alert_id) }}{% endblock %}
 {% block content %}
 {% macro esub(s) -%}
-{% if not s.has_assets %}E_sub = {{ s.E_sub | f3 }}{{ _("（无控制链：HIL 仿真）") }}{% elif not s.E_sub_assessed %}{{ _("E_sub 未评估（上游资产均未扫描，按 0 计算）") }}{% else %}E_sub = {{ s.E_sub | f3 }}{% if s.unassessed_assets %}{{ _("（另有 {n} 个上游资产未评估）").format(n=s.unassessed_assets | length) }}{% endif %}{% endif %}
+{% if not s.has_assets %}E_sub = {{ s.E_sub | f3 }} (no control chain: HIL simulation){% elif not s.E_sub_assessed %}E_sub not assessed (no upstream asset has been scanned; counted as 0){% else %}E_sub = {{ s.E_sub | f3 }}{% if s.unassessed_assets %}{{ " ({n} more upstream assets not assessed)".format(n=s.unassessed_assets | length) }}{% endif %}{% endif %}
 {%- endmacro %}
-<p><a href="index.html">← {{ _("告警列表") }}</a></p>
-<h1>{{ _("告警 {id}").format(id=a.alert_id) }}{{ _("　") }}<span class="muted">{{ _("优先级第 {rank} / {n}").format(rank=a.rank, n=n_alerts) }}</span></h1>
+<p><a href="index.html">← Alert list</a></p>
+<h1>{{ "Alert {id}".format(id=a.alert_id) }} <span class="muted">{{ "Priority rank {rank} / {n}".format(rank=a.rank, n=n_alerts) }}</span></h1>
 {% if a.is_mock is defined and a.is_mock %}
-<div class="banner mock">[MOCK] {{ _("本告警由 mock 报警生成（{case}），分数与时间为虚构值，不是模型输出。").format(case=(a.mock_case | trd) if a.mock_case is defined else "mock") }}</div>
+<div class="banner mock">[MOCK] {{ "This alert was generated from a mock alert ({case}); scores and times are made-up values, not model output.".format(case=(a.mock_case) if a.mock_case is defined else "mock") }}</div>
 {% endif %}
-<div class="banner disclaimer">{{ _("免责声明：") }}{{ disclaimer }}</div>
+<div class="banner disclaimer">Disclaimer: {{ disclaimer }}</div>
 
-<h2>{{ _("概要") }}</h2>
+<h2>Summary</h2>
 <div class="kpis">
   <div class="kpi">Priority<b>{{ a.priority | f3 }}</b></div>
-  <div class="kpi">{{ _("异常严重度 S") }}<b>{{ a.S | f3 }}</b></div>
-  <div class="kpi">{{ _("加权 E_sub") }}<b>{{ a.E_sub | f3 }}</b>{% if exposure(a) == "not_assessed" %}<span class="review">{{ _("未评估：上游资产均未扫描") }}</span>{% elif exposure(a) == "partial" %}<span class="review">{{ _("可能被低估") }}</span>{% endif %}</div>
-  <div class="kpi">{{ _("分数 / 阈值") }}<b>{{ _("{ratio} 倍").format(ratio="%.2f" | format(ratio)) }}</b></div>
+  <div class="kpi">Anomaly severity S<b>{{ a.S | f3 }}</b></div>
+  <div class="kpi">Weighted E_sub<b>{{ a.E_sub | f3 }}</b>{% if exposure(a) == "not_assessed" %}<span class="review">Not assessed: no upstream asset scanned</span>{% elif exposure(a) == "partial" %}<span class="review">Possibly underestimated</span>{% endif %}</div>
+  <div class="kpi">Score / threshold<b>{{ "{ratio}x".format(ratio="%.2f" | format(ratio)) }}</b></div>
 </div>
 <table>
-  <tr><th>{{ _("起止时间") }}</th><td>{{ a.start }} ~ {{ a.end }}</td></tr>
-  <tr><th>{{ _("持续时长") }}</th><td>{{ duration }}</td></tr>
-  <tr><th>{{ _("最大异常分数 / 阈值") }}</th><td>{{ "%.4f" | format(a.max_score) }} / {{ "%.4f" | format(a.threshold) }}</td></tr>
+  <tr><th>Start ~ end</th><td>{{ a.start }} ~ {{ a.end }}</td></tr>
+  <tr><th>Duration</th><td>{{ duration }}</td></tr>
+  <tr><th>Max anomaly score / threshold</th><td>{{ "%.4f" | format(a.max_score) }} / {{ "%.4f" | format(a.threshold) }}</td></tr>
 </table>
 
-<h2>{{ _("Top-{k} 异常传感器").format(k=a.topk | length) }}</h2>
+<h2>{{ "Top-{k} anomalous sensors".format(k=a.topk | length) }}</h2>
 <table>
-  <tr><th>{{ _("传感器") }}</th><th>{{ _("占全部传感器误差的比例") }}</th><th>{{ _("子系统") }}</th></tr>
+  <tr><th>Sensor</th><th>Share of total sensor error</th><th>Subsystem</th></tr>
   {% for t in a.topk %}
-  <tr><td><code>{{ t.sensor }}</code></td><td class="num">{{ t.share | pct }}</td><td>{{ t.subsystem or _("未知前缀（不参与加权）") }}</td></tr>
+  <tr><td><code>{{ t.sensor }}</code></td><td class="num">{{ t.share | pct }}</td><td>{{ t.subsystem or "Unknown prefix (excluded from weighting)" }}</td></tr>
   {% endfor %}
 </table>
 
-<h2>{{ _("推断受影响的子系统") }}</h2>
+<h2>Inferred affected subsystems</h2>
 <ul>
 {% for s in a.subsystems %}
-  <li><b>{{ s.id }} {{ s.name | trd }}</b>{{ _("：权重 {weight}，业务关键度 {crit}，暴露风险 ").format(weight=s.weight | pct, crit=s.criticality) }}{{ esub(s) }}
-  {% if s.note %}<div class="banner review">{{ _("说明：") }}{{ s.note | trd }}</div>{% endif %}</li>
+  <li><b>{{ s.id }} {{ s.name }}</b>{{ ": weight {weight}, business criticality {crit}, exposure risk ".format(weight=s.weight | pct, crit=s.criticality) }}{{ esub(s) }}
+  {% if s.note %}<div class="banner review">Note: {{ s.note }}</div>{% endif %}</li>
 {% else %}
-  <li>{{ _("无法识别受影响的子系统（Top-k 传感器前缀均不在资产映射中）。") }}</li>
+  <li>The affected subsystem cannot be identified (none of the Top-k sensor prefixes is in the asset map).</li>
 {% endfor %}
 {% if a.unmapped_sensors %}
-  <li>{{ _("未映射的传感器：") }}{% for x in a.unmapped_sensors %}<code>{{ x }}</code>{{ _("、") if not loop.last }}{% endfor %}</li>
+  <li>Unmapped sensors: {% for x in a.unmapped_sensors %}<code>{{ x }}</code>{{ ", " if not loop.last }}{% endfor %}</li>
 {% endif %}
 </ul>
 
-<h2>{{ _("可能的入侵路径") }}</h2>
+<h2>Possible intrusion paths</h2>
 {% if a.risk_underestimated %}
-<div class="banner review">{{ _("注意：") }}{{ _(UNDERESTIMATED) }}{{ _("（未评估：{assets}）").format(assets=a.unassessed_assets | join(_("、"))) }}</div>
+<div class="banner review">Note: {{ UNDERESTIMATED }}{{ " (not assessed: {assets})".format(assets=a.unassessed_assets | join(", ")) }}</div>
 {% endif %}
 <ul>
 {% for p in a.path %}
-  <li>{{ p.subsystem }}{{ _("：") }}<span class="path">{{ p.path | join(" → ") }}</span></li>
+  <li>{{ p.subsystem }}: <span class="path">{{ p.path | join(" → ") }}</span></li>
 {% else %}
-  <li>{{ _("无（受影响子系统没有挂接控制链）。") }}</li>
+  <li>None (the affected subsystems have no control chain attached).</li>
 {% endfor %}
 </ul>
 {% if a.path_assets %}
 <table>
-  <tr><th>{{ _("资产") }}</th><th>{{ _("风险 R_asset") }}</th><th>{{ _("状态") }}</th><th>{{ _("参与计算漏洞数") }}</th><th>{{ _("需核实的 KEV 漏洞") }}</th></tr>
+  <tr><th>Asset</th><th>Risk R_asset</th><th>Status</th><th>Vulnerabilities counted</th><th>KEV vulns needing review</th></tr>
   {% for x in a.path_assets %}
-  <tr><td>{{ x.asset }}</td><td class="num">{{ x.R_asset | risk }}</td><td>{{ _(status_text[x.status]) }}</td><td class="num">{{ x.n_vulns }}</td><td class="num">{{ x.n_needs_review }}</td></tr>
+  <tr><td>{{ x.asset }}</td><td class="num">{{ x.R_asset | risk }}</td><td>{{ status_text[x.status] }}</td><td class="num">{{ x.n_vulns }}</td><td class="num">{{ x.n_needs_review }}</td></tr>
   {% endfor %}
 </table>
 {% endif %}
 
-<h2>{{ _("路径资产的高危漏洞（按 r_v 排序，QoD ≥ {q}）").format(q=meta.params.min_qod) }}</h2>
+<h2>{{ "High-risk vulnerabilities on the path assets (sorted by r_v, QoD ≥ {q})".format(q=meta.params.min_qod) }}</h2>
 {% if a.vulns %}
 <table>
-  <tr><th>#</th><th>{{ _("资产") }}</th><th>{{ _("端口") }}</th><th>{{ _("漏洞") }}</th><th>CVSS</th><th>EPSS</th><th>KEV</th><th>QoD</th><th>r_v</th></tr>
+  <tr><th>#</th><th>Asset</th><th>Port</th><th>Vulnerability</th><th>CVSS</th><th>EPSS</th><th>KEV</th><th>QoD</th><th>r_v</th></tr>
   {% for v in a.vulns %}
   <tr><td class="num">{{ loop.index }}</td><td>{{ v.asset }}</td><td>{{ v.port }}</td><td>{{ v.name }}</td>
       <td class="num">{{ v.cvss }}</td><td class="num">{{ "%.3f" | format(v.epss) }}</td>
@@ -77,14 +77,14 @@
   {% endfor %}
 </table>
 {% else %}
-<p class="muted">{{ _("路径资产上没有达到 QoD 阈值的漏洞。") }}</p>
+<p class="muted">No vulnerabilities on the path assets reach the QoD threshold.</p>
 {% endif %}
 
 {% if a.needs_review %}
-<h2>{{ _("需人工核实") }}</h2>
-<div class="banner review">{{ _("以下漏洞命中 CISA KEV，但 QoD < {q}（仅版本比对），未参与风险计算，需人工核实是否真实存在。").format(q=meta.params.min_qod) }}</div>
+<h2>Needs manual verification</h2>
+<div class="banner review">{{ "The following vulnerabilities are in CISA KEV but have QoD < {q} (version comparison only). They are not included in the risk calculation and need manual verification that they really exist.".format(q=meta.params.min_qod) }}</div>
 <table>
-  <tr><th>{{ _("资产") }}</th><th>{{ _("端口") }}</th><th>{{ _("漏洞") }}</th><th>KEV CVE</th><th>EPSS</th><th>QoD</th></tr>
+  <tr><th>Asset</th><th>Port</th><th>Vulnerability</th><th>KEV CVE</th><th>EPSS</th><th>QoD</th></tr>
   {% for v in a.needs_review %}
   <tr><td>{{ v.asset }}</td><td>{{ v.port }}</td><td>{{ v.name }}</td><td class="kev">{{ v.kev_cves | join(", ") }}</td>
       <td class="num">{{ "%.3f" | format(v.epss) }}</td><td class="num">{{ v.qod }}</td></tr>
@@ -92,17 +92,17 @@
 </table>
 {% endif %}
 
-<h2>{{ _("建议动作") }}</h2>
+<h2>Recommended actions</h2>
 <ol>
 {% for step in actions.steps %}
   <li>{{ step }}</li>
 {% endfor %}
 </ol>
 {% if actions.fixes %}
-<p>{{ _("OpenVAS 修复建议：") }}</p>
+<p>OpenVAS remediation advice:</p>
 <ul>
   {% for v in actions.fixes %}
-  <li><b>{{ v.name }}</b>{{ _("（{asset} {port}）：").format(asset=v.asset, port=v.port) }}{{ v.solution }}</li>
+  <li><b>{{ v.name }}</b>{{ " ({asset} {port}): ".format(asset=v.asset, port=v.port) }}{{ v.solution }}</li>
   {% endfor %}
 </ul>
 {% endif %}

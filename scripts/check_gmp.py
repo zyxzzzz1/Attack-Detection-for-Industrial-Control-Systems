@@ -36,14 +36,14 @@ def load_socket_path(config_path: Path) -> str | None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="只读检查 gvmd 的 GMP 连接")
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help="配置文件路径")
+    parser = argparse.ArgumentParser(description="Read-only check of the GMP connection to gvmd")
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help="path of the config file")
     parser.add_argument(
         "--socket",
         default=os.environ.get("GVM_SOCKET"),
-        help="gvmd socket 路径（覆盖 GVM_SOCKET 与配置文件）",
+        help="gvmd socket path (overrides GVM_SOCKET and the config file)",
     )
-    parser.add_argument("--timeout", type=int, default=60, help="socket 超时秒数")
+    parser.add_argument("--timeout", type=int, default=60, help="socket timeout in seconds")
     return parser.parse_args()
 
 
@@ -59,10 +59,10 @@ def main() -> int:
 
     args.socket = args.socket or load_socket_path(args.config)
     if not args.socket:
-        print(f"[失败] 未指定 socket 路径，且 {args.config} 中没有 gvm.socket_path")
+        print(f"[FAIL] no socket path given and {args.config} has no gvm.socket_path")
         return 1
     if not os.path.exists(args.socket):
-        print(f"[失败] socket 不存在或当前用户无法访问：{args.socket}")
+        print(f"[FAIL] socket does not exist or is not accessible to the current user: {args.socket}")
         return 1
 
     connection = UnixSocketConnection(path=args.socket, timeout=args.timeout)
@@ -70,22 +70,22 @@ def main() -> int:
         with Gmp(connection=connection, transform=EtreeCheckCommandTransform()) as gmp:
             # get_version needs no authentication and can be used purely to probe connectivity
             version = gmp.get_version().findtext("version")
-            print(f"[通过] 已连接 {args.socket}，GMP 版本 {version}")
+            print(f"[OK] connected to {args.socket}, GMP version {version}")
 
             if not user or not password:
-                print("[警告] 未设置 GVM_USER / GVM_PASSWORD，跳过认证后的检查")
+                print("[WARN] GVM_USER / GVM_PASSWORD not set, skipping the checks that need authentication")
                 return 2
 
             gmp.authenticate(user, password)
-            print(f"[通过] 用户 {user} 认证成功")
+            print(f"[OK] user {user} authenticated")
             ok = True
 
-            print("\n== Feed 状态")
+            print("\n== Feed status")
             for feed in gmp.get_feeds().findall("feed"):
                 syncing = feed.find("currently_syncing") is not None
                 print(
                     f"  {feed.findtext('type', ''):10} version={feed.findtext('version', '')}"
-                    f"{'  [同步中]' if syncing else ''}"
+                    f"{'  [syncing]' if syncing else ''}"
                 )
 
             print("\n== Scan configs")
@@ -93,7 +93,7 @@ def main() -> int:
             for name, uid in configs:
                 print(f"  {name}  ({uid})")
             if not any(name == REQUIRED_CONFIG for name, _ in configs):
-                print(f"[失败] 未找到 scan config “{REQUIRED_CONFIG}”")
+                print(f"[FAIL] scan config \"{REQUIRED_CONFIG}\" not found")
                 ok = False
 
             print("\n== Scanners")
@@ -105,19 +105,19 @@ def main() -> int:
             for name, uid in port_lists:
                 print(f"  {name}  ({uid})")
             if not port_lists:
-                print("[失败] port list 为空")
+                print("[FAIL] port list is empty")
                 ok = False
 
             targets = gmp.get_targets(filter_string="rows=-1").findall("target")
             tasks = gmp.get_tasks(filter_string="rows=-1").findall("task")
-            print(f"\n== 已有 target 数量：{len(targets)}，task 数量：{len(tasks)}")
+            print(f"\n== Existing targets: {len(targets)}, tasks: {len(tasks)}")
 
             return 0 if ok else 3
     except GvmError as e:
-        print(f"[失败] GMP 错误：{e}")
+        print(f"[FAIL] GMP error: {e}")
         return 1
     except OSError as e:
-        print(f"[失败] 连接 socket 出错：{e}")
+        print(f"[FAIL] error connecting to the socket: {e}")
         return 1
 
 

@@ -51,5 +51,5 @@ def stage_cli(stages: str, description: str) -> int:
     """Entry point of the single-stage scripts (python -m src.train etc.): forwards to run_model and runs only the given stage."""
     from src.run_model import main
     if any(a in ("-h", "--help") for a in sys.argv[1:]):
-        print(f"{description}\n等价于 python -m src.run_model --stages {stages} ...；参数如下。\n")
+        print(f"{description}\nEquivalent to python -m src.run_model --stages {stages} ...; arguments below.\n")
     return main([*sys.argv[1:], "--stages", stages])

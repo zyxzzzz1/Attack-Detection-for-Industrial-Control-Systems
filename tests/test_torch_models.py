@@ -191,7 +191,7 @@ def test_resume_when_training_already_finished_does_not_train_again(tmp_path):
     fit("lstm_ae", tmp_path)
     model = build_model("lstm_ae", small_cfg())
     model.bind(directory=tmp_path, resume=True, log=model.log)
-    model._epoch_end_hook = lambda epoch: pytest.fail("不应再训练")
+    model._epoch_end_hook = lambda epoch: pytest.fail("must not train again")
     train, val, _ = datasets()
     assert model.fit(train, val)["final_epoch"] == 3
 

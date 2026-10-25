@@ -20,7 +20,6 @@ import pandas as pd
 
 from src.eval.run_io import load_run
 from src.utils.paths import load_config
-from src.utils.i18n import t  # noqa: E402
 from src.utils.plotstyle import EVENT_EDGE, EVENT_FILL, INK2, SERIES, apply_style, clean_axes, plt
 from src.utils.reporting import ReportSource, add_common_args
 
@@ -64,19 +63,19 @@ def plot_scores(runs: dict, part_idx: int, path, smoke: bool) -> None:
         s = run.scores[part["offset"]:part["offset"] + part["rows"]]
         t0 = pd.Timestamp(part["start_time"])
         x, y = downsample_max(s)
-        ax.plot(t0 + pd.to_timedelta(x, unit="s"), y, color=SERIES[0], linewidth=0.8, label=t("异常分数"))
-        ax.axhline(run.threshold["threshold"], color=INK2, linestyle="--", linewidth=0.9, label=t("阈值（val_thr 99% 分位）"))
+        ax.plot(t0 + pd.to_timedelta(x, unit="s"), y, color=SERIES[0], linewidth=0.8, label="Anomaly score")
+        ax.axhline(run.threshold["threshold"], color=INK2, linestyle="--", linewidth=0.9, label="Threshold (99% quantile of val_thr)")
         for i, e in enumerate(events[events["part"] == part_idx].itertuples()):
             ax.axvspan(t0 + pd.Timedelta(seconds=e.start), t0 + pd.Timedelta(seconds=e.end + 1), facecolor=EVENT_FILL,
-                       edgecolor=EVENT_EDGE, linewidth=0.5, hatch="///", label=t("攻击区间") if i == 0 else None, zorder=0)
+                       edgecolor=EVENT_EDGE, linewidth=0.5, hatch="///", label="Attack interval" if i == 0 else None, zorder=0)
         ax.set_yscale("log")
         ax.set_ylabel(name)
         clean_axes(ax)
     axes[0, 0].legend(loc="lower right", bbox_to_anchor=(1, 1.02), ncol=3, fontsize=8)
     part = next(iter(runs.values()))[0].index["files"][part_idx]
-    axes[0, 0].set_title(t("{part}：各模型的逐秒异常分数").format(part=part_label(part)) + f"{t('（冒烟数据，仅检查流程）') if smoke else ''}",
+    axes[0, 0].set_title("{part}: per-second anomaly score of each model".format(part=part_label(part)) + f"{' (smoke-test data, pipeline check only)' if smoke else ''}",
                          loc="left", fontsize=11)
-    axes[-1, 0].set_xlabel(t("时间"))
+    axes[-1, 0].set_xlabel("Time")
     fig.autofmt_xdate(rotation=0, ha="center")
     fig.tight_layout()
     fig.savefig(path)
@@ -99,7 +98,7 @@ def plot_distributions(runs: dict, root, path, smoke: bool) -> None:
         run, events = runs[name]
         mask = event_mask(run, events)
         val = np.load(root / name / "scores_val_thr.npy")
-        groups = [("val_thr", val), (t("test 正常"), run.scores[~mask]), (t("test 攻击"), run.scores[mask])]
+        groups = [("val_thr", val), ("test normal", run.scores[~mask]), ("test attack", run.scores[mask])]
         pooled = np.concatenate([g[~np.isnan(g)] for _, g in groups])
         pooled = pooled[pooled > 0]
         if len(pooled) == 0:
@@ -112,11 +111,11 @@ def plot_distributions(runs: dict, root, path, smoke: bool) -> None:
         ax.axvline(run.threshold["threshold"], color=INK2, linestyle="--", linewidth=0.9)
         ax.set_xscale("log")
         ax.set_title(name, loc="left", fontsize=10)
-        ax.set_xlabel(t("异常分数"))
+        ax.set_xlabel("Anomaly score")
         clean_axes(ax)
-    axes[0, 0].set_ylabel(t("密度"))
+    axes[0, 0].set_ylabel("Density")
     axes[0, 0].legend(fontsize=8, loc="upper right")
-    fig.suptitle(t("分数分布（虚线为阈值）") + f"{t('（冒烟数据，仅检查流程）') if smoke else ''}", x=0.01, ha="left", fontsize=11)
+    fig.suptitle("Score distributions (dashed line = threshold)" + f"{' (smoke-test data, pipeline check only)' if smoke else ''}", x=0.01, ha="left", fontsize=11)
     fig.tight_layout()
     fig.savefig(path)
     plt.close(fig)
@@ -132,15 +131,15 @@ def plot_training(root, names: list[str], path, smoke: bool) -> bool:
         ax.plot(log["epoch"], log["val_es_loss"], color=SERIES[1], linewidth=1.6, marker="o", ms=3, label="val_es")
         best = log.loc[log["val_es_loss"].idxmin()]
         ax.axvline(best["epoch"], color=INK2, linestyle=":", linewidth=0.9)
-        ax.annotate(t("最好：第 {n} 个 epoch").format(n=int(best["epoch"])), (best["epoch"], best["val_es_loss"]), fontsize=8,
+        ax.annotate("best: epoch {n}".format(n=int(best["epoch"])), (best["epoch"], best["val_es_loss"]), fontsize=8,
                     xytext=(4, 8), textcoords="offset points")
         ax.set_yscale("log")
         ax.set_title(name, loc="left", fontsize=10)
         ax.set_xlabel("epoch")
         clean_axes(ax)
-    axes[0, 0].set_ylabel(t("损失"))
+    axes[0, 0].set_ylabel("Loss")
     axes[0, 0].legend(fontsize=8)
-    fig.suptitle(t("训练曲线") + f"{t('（冒烟数据，仅检查流程）') if smoke else ''}", x=0.01, ha="left", fontsize=11)
+    fig.suptitle("Training curves" + f"{' (smoke-test data, pipeline check only)' if smoke else ''}", x=0.01, ha="left", fontsize=11)
     fig.tight_layout()
     fig.savefig(path)
     plt.close(fig)
@@ -155,9 +154,9 @@ def per_subsystem_detection(runs: dict) -> pd.DataFrame:
         subs = sorted({s for v in events["subsystems"].fillna("") for s in v.split("+") if s})
         for s in subs:
             groups[s] = events[[s in str(v).split("+") for v in events["subsystems"].fillna("")]]
-        groups["无子系统标签"] = events[events["subsystems"].fillna("") == ""]
+        groups["no subsystem label"] = events[events["subsystems"].fillna("") == ""]
         for sub, ev in groups.items():
-            if sub == "无子系统标签" and ev.empty:
+            if sub == "no subsystem label" and ev.empty:
                 continue
             detected = ev[ev["detected"].astype(bool)] if len(ev) else ev
             rows.append({"model": name, "subsystem": sub, "n_events": len(ev), "n_detected": len(detected),
@@ -168,22 +167,22 @@ def per_subsystem_detection(runs: dict) -> pd.DataFrame:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="M3：分数曲线、分数分布、训练曲线、分子系统检出表")
+    p = argparse.ArgumentParser(description="M3: score curves, score distributions, training curves, per-subsystem detection table")
     add_common_args(p)
-    p.add_argument("--models", nargs="+", help="默认为 config 的 ml.models 中全部模型")
+    p.add_argument("--models", nargs="+", help="defaults to all models in ml.models of the config")
     args = p.parse_args(argv)
     cfg = load_config(args.config)
     src = ReportSource(cfg, args.smoke)
     src.banner()
     names = src.usable_runs(args.models or list(cfg["ml"]["models"]), required=REQUIRED)
     if not names:
-        print("[提示] 没有可用的运行，未生成图")
+        print("[INFO] no runs available, no figures generated")
         return 0
     apply_style()
     runs = {n: (load_run(src.root / n), read_events(src.root / n)) for n in names}
     parts = [[(p["file"], p["start_row"], p["rows"]) for p in run.index["files"]] for run, _ in runs.values()]
     if any(x != parts[0] for x in parts):
-        print("[错误] 各模型的 test_index.json 不一致（不是同一份测试数据），不能画在一起", file=sys.stderr)
+        print("[ERROR] the test_index.json files of the models differ (not the same test data), so they cannot be plotted together", file=sys.stderr)
         return 1
     first = next(iter(runs.values()))[0]
     for k, part in enumerate(first.index["files"]):
@@ -191,8 +190,8 @@ def main(argv: list[str] | None = None) -> int:
     plot_distributions(runs, src.root, src.out / "score_distribution.png", args.smoke)
     has_training = plot_training(src.root, names, src.out / "training_curves.png", args.smoke)
     per_subsystem_detection(runs).to_csv(src.out / "per_subsystem_detection.csv", index=False)
-    print(f"[生成] {src.out}：scores_*.png × {len(first.index['files'])}、score_distribution.png、"
-          f"{'training_curves.png、' if has_training else ''}per_subsystem_detection.csv（模型：{', '.join(names)}）")
+    print(f"[GENERATED] {src.out}: scores_*.png × {len(first.index['files'])}, score_distribution.png, "
+          f"{'training_curves.png, ' if has_training else ''}per_subsystem_detection.csv (models: {', '.join(names)})")
     return 0
 
 

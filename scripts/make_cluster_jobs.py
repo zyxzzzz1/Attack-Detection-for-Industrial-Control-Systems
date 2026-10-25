@@ -96,10 +96,10 @@ def render_all(cluster: dict, cfg: dict) -> dict[str, str]:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="生成集群作业脚本")
+    p = argparse.ArgumentParser(description="Generate the cluster job scripts")
     p.add_argument("--cluster-config", type=Path, default=CLUSTER_YAML)
     p.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
-    p.add_argument("--check", action="store_true", help="只检查已有文件是否与配置一致")
+    p.add_argument("--check", action="store_true", help="only check whether the existing files match the config")
     args = p.parse_args()
 
     cfg = load_config(args.config)
@@ -118,18 +118,18 @@ def main() -> int:
                     stale.append(str(path.relative_to(ROOT)))
             else:
                 path.write_text(text, encoding="utf-8")
-                print(f"[生成] {path.relative_to(ROOT)}")
+                print(f"[GENERATED] {path.relative_to(ROOT)}")
     final = targets[-1][1]
     todos = find_todos(final)
     if not has_local:
-        print("[提示] 没有 config/cluster.local.yaml：只生成了入库的作业脚本（路径为 TODO，只能用于本地 --smoke）。"
-              "要在集群上运行，先按 config/cluster.local.example.yaml 写一份。")
+        print("[INFO] no config/cluster.local.yaml: only the tracked job scripts were generated (paths are TODO, usable only for local --smoke). "
+              "To run on the cluster, write one following config/cluster.local.example.yaml first.")
     if todos:
-        print(f"[提示] {'合并后的配置' if has_local else 'cluster.yaml'} 还有 {len(todos)} 个 TODO：")
+        print(f"[INFO] {'the merged config' if has_local else 'cluster.yaml'} still has {len(todos)} TODOs:")
         for t in todos:
-            print(f"  - {t}{'（影响作业，补全前不能在集群上提交）' if t.startswith(BLOCKING) else ''}")
+            print(f"  - {t}{' (affects jobs; cannot submit on the cluster until filled in)' if t.startswith(BLOCKING) else ''}")
     if stale:
-        print(f"[过期] 与配置不一致，需要重新生成：{stale}", file=sys.stderr)
+        print(f"[STALE] does not match the config, regenerate: {stale}", file=sys.stderr)
         return 1
     return 0
 

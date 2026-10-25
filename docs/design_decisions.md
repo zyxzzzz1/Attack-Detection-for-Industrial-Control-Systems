@@ -171,10 +171,9 @@ Every model implements `fit(train_ds, val_es_ds)` and `score(ds) -> (scores, per
 
 ### 8c. Display language (2026-10-09)
 
-- `ui.lang` (en / zh, default en); the environment variable `UI_LANG` overrides it.
-- It covers the Streamlit app, alert cards, the index page, `cases.md`, disclaimers and all figure text.
-- Only display text changes. No computation, field name or number changes, and tests check that the values are
-  identical in both languages.
+- Originally `ui.lang` (en / zh) with a translation table. Since 2026-10-25 the code is English only: the zh option,
+  the translation table and the Chinese copy of `key_numbers.md` were removed, and all display text, comments and
+  generated reports are English. No computation, field name or number changed.
 - The disclaimer is translated exactly: "Asset mapping and vulnerability data come from a lab environment and are for
   demonstration only."
 

@@ -25,10 +25,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.fusion.asset_graph import AssetGraph
 from src.fusion.risk import compute_risk, load_params
-from src.utils.i18n import DISCLAIMER_ZH, disclaimer
+from src.utils.disclaimer import DISCLAIMER
 
 ROOT = Path(__file__).resolve().parents[2]
-DISCLAIMER = DISCLAIMER_ZH  # Chinese original; the disclaimer in the output uses disclaimer() per ui.lang
 VULN_FIELDS = ["asset", "asset_ip", "port", "name", "cvss", "epss", "in_kev", "kev_cves", "qod",
                "r_v", "solution", "solution_type", "nvt_oid"]
 
@@ -96,7 +95,7 @@ def enrich_alert(alert: Alert, graph: AssetGraph, risk: dict, params: dict) -> d
     # Section 8: time fields keep the HAI raw strings and are converted to pandas Timestamp internally
     start, end = pd.Timestamp(alert.start), pd.Timestamp(alert.end)
     if end < start:
-        raise ValueError(f"{alert.alert_id} 的 end 早于 start")
+        raise ValueError(f"end of {alert.alert_id} is earlier than start")
     base = alert.model_dump()
     base["topk"] = [{**t, "subsystem": graph.sensor_to_subsystem(t["sensor"])} for t in base["topk"]]
     return {
@@ -114,7 +113,7 @@ def enrich_alert(alert: Alert, graph: AssetGraph, risk: dict, params: dict) -> d
         "risk_underestimated": bool(unassessed),
         "vulns": [_vuln_view(r) for r in vulns],
         "needs_review": [_vuln_view(r) for r in review],
-        "disclaimer": disclaimer(),
+        "disclaimer": DISCLAIMER,
     }
 
 
@@ -126,7 +125,7 @@ def prioritize(alerts: list[dict], vulns: list[dict], graph: AssetGraph, params:
     for i, a in enumerate(out, 1):
         a["rank"] = i
     return {
-        "disclaimer": disclaimer(),
+        "disclaimer": DISCLAIMER,
         "is_mock": any(a.get("is_mock", False) for a in alerts),
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "params": {k: params[k] for k in ("alpha", "beta", "gamma", "min_qod")},
@@ -141,9 +140,9 @@ def prioritize(alerts: list[dict], vulns: list[dict], graph: AssetGraph, params:
 def main() -> int:
     p = argparse.ArgumentParser(description="alerts.json + vulns_enriched.json → enriched_alerts.json")
     p.add_argument("--config", type=Path, default=ROOT / "config" / "config.yaml")
-    p.add_argument("--alerts", type=Path, help="默认取 config.yaml 的 fusion.alerts_json")
-    p.add_argument("--vulns", type=Path, help="默认取 config.yaml 的 vuln.vulns_enriched_json")
-    p.add_argument("--output", type=Path, help="默认取 config.yaml 的 fusion.enriched_alerts_json")
+    p.add_argument("--alerts", type=Path, help="defaults to fusion.alerts_json in config.yaml")
+    p.add_argument("--vulns", type=Path, help="defaults to vuln.vulns_enriched_json in config.yaml")
+    p.add_argument("--output", type=Path, help="defaults to fusion.enriched_alerts_json in config.yaml")
     args = p.parse_args()
     with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
@@ -158,11 +157,11 @@ def main() -> int:
     dst = args.output or ROOT / fcfg["enriched_alerts_json"]
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[保存] {dst}（is_mock={out['is_mock']}）")
+    print(f"[SAVED] {dst} (is_mock={out['is_mock']})")
     for a in out["alerts"]:
         subs = " + ".join(f"{s['id']}×{s['weight']:.2f}" for s in a["subsystems"]) or "-"
         print(f"  #{a['rank']} {a['alert_id']:<10} priority={a['priority']:.3f}  S={a['S']:.3f}  "
-              f"E_sub={a['E_sub']:.3f}  子系统 {subs}  需核实 {len(a['needs_review'])}")
+              f"E_sub={a['E_sub']:.3f}  subsystems {subs}  needs review {len(a['needs_review'])}")
     return 0
 
 

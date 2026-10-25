@@ -25,13 +25,12 @@ from src.fusion.asset_graph import AssetGraph  # noqa: E402
 from src.fusion.prioritize import prioritize  # noqa: E402
 from src.fusion.render_card import card_context, exposure, make_env, shown_subsystems  # noqa: E402
 from src.fusion.risk import load_params  # noqa: E402
-from src.utils import i18n  # noqa: E402
-from src.utils.i18n import disclaimer, t, t_data  # noqa: E402
+from src.utils.disclaimer import DISCLAIMER  # noqa: E402
 
 
 # Assessment status of the alert-level E_sub -> text of the "path risk" column
-PATH_RISK_TEXT = {"assessed": "已评估", "partial": "可能低估", "not_assessed": "未评估：上游资产均未扫描"}
-SOURCE_REAL, SOURCE_MOCK = "真实报警（LSTM-AE）", "mock 报警"   # Internal keys (Chinese source text), passed through t() for display
+PATH_RISK_TEXT = {"assessed": "Assessed", "partial": "Possibly underestimated", "not_assessed": "Not assessed: no upstream asset scanned"}
+SOURCE_REAL, SOURCE_MOCK = "Real alerts (LSTM-AE)", "Mock alerts"
 
 
 @st.cache_data
@@ -52,7 +51,7 @@ def load_data(config_path: str) -> dict:
 
 
 def fmt_risk(x) -> str:
-    return t("未评估") if x is None else f"{x:.3f}"
+    return "Not assessed" if x is None else f"{x:.3f}"
 
 
 def subsystem_esub_text(s: dict) -> str:
@@ -60,8 +59,8 @@ def subsystem_esub_text(s: dict) -> str:
     if s["E_sub_assessed"]:
         return f"{s['E_sub']:.3f}"
     if s["unassessed_assets"]:
-        return f"{s['E_sub']:.3f}" + t("（未评估：上游资产均未扫描）")
-    return f"{s['E_sub']:.3f}" + t("（无控制链：HIL 仿真）")
+        return f"{s['E_sub']:.3f}" + " (not assessed: no upstream asset scanned)"
+    return f"{s['E_sub']:.3f}" + " (no control chain: HIL simulation)"
 
 
 def ranking_table(result: dict, baseline: dict, limit: int | None = None) -> pd.DataFrame:
@@ -70,17 +69,17 @@ def ranking_table(result: dict, baseline: dict, limit: int | None = None) -> pd.
     for a in result["alerts"][:limit or None]:
         delta = base_rank[a["alert_id"]] - a["rank"]
         rows.append({
-            t("排名"): a["rank"],
-            t("相对默认参数"): "—" if delta == 0 else f"{'↑' if delta > 0 else '↓'}{abs(delta)}",
-            t("告警"): a["alert_id"],
-            t("起始时间"): a["start"],
+            "Rank": a["rank"],
+            "vs. default parameters": "—" if delta == 0 else f"{'↑' if delta > 0 else '↓'}{abs(delta)}",
+            "Alert": a["alert_id"],
+            "Start time": a["start"],
             "Priority": round(a["priority"], 3),
-            t("分数 / 阈值"): round(a["max_score"] / a["threshold"], 2),
+            "Score / threshold": round(a["max_score"] / a["threshold"], 2),
             "S": round(a["S"], 3),
-            t("子系统"): t("、").join(f"{s['id']} {s['weight']:.0%}" for s in shown_subsystems(a)) or "-",
+            "Subsystem": ", ".join(f"{s['id']} {s['weight']:.0%}" for s in shown_subsystems(a)) or "-",
             "E_sub": round(a["E_sub"], 3),
-            t("路径风险"): t(PATH_RISK_TEXT[exposure(a)]),
-            t("需核实的 KEV 漏洞"): len(a["needs_review"]),
+            "Path risk": PATH_RISK_TEXT[exposure(a)],
+            "KEV vulns needing review": len(a["needs_review"]),
         })
     return pd.DataFrame(rows)
 
@@ -88,34 +87,33 @@ def ranking_table(result: dict, baseline: dict, limit: int | None = None) -> pd.
 def main() -> None:
     data = load_data(str(ROOT / "config" / "config.yaml"))
     cfg, defaults = data["cfg"], data["params"]
-    i18n.configure(cfg)   # Display language (ui.lang)
-    st.set_page_config(page_title=t("融合告警演示"), layout="wide")
+    st.set_page_config(page_title="Fusion alert demo", layout="wide")
     graph = AssetGraph.from_yaml(ROOT / cfg["fusion"]["asset_map"])
 
-    st.title(t("过程异常 + 漏洞上下文 融合告警"))
+    st.title("Process anomaly + vulnerability context: fused alerts")
     if not data["sources"]:
-        st.error(t("没有可用的报警文件：先运行 python -m scripts.export_alerts（真实）或 python -m scripts.make_mock_alerts（mock）。"))
+        st.error("No alert file is available: run python -m scripts.export_alerts (real) or python -m scripts.make_mock_alerts (mock) first.")
         st.stop()
     with st.sidebar:
-        st.header(t("报警数据"))
-        source = st.radio(t("报警来源"), list(data["sources"]), index=0, format_func=t,
-                          help=t("默认读取真实报警（LSTM-AE 在 HAI 测试集上的全部报警段）；mock 报警是手工构造的示例。"))
+        st.header("Alert data")
+        source = st.radio("Alert source", list(data["sources"]), index=0,
+                          help="Real alerts are read by default (all alarm segments of LSTM-AE on the HAI test set); mock alerts are hand-made examples.")
     alerts = data["sources"][source]
     limit = cfg["fusion"].get("max_rendered_alerts") or None
     is_mock = any(a.get("is_mock", False) for a in alerts)
     if is_mock:
-        st.warning("[MOCK] " + t("报警来自 mock 数据，分数与时间为虚构值，不是模型输出。"))
+        st.warning("[MOCK] " + "Alerts come from mock data; scores and times are made-up values, not model output.")
     else:
-        st.info(t("真实报警：{model} 在 HAI 21.03 测试集上的全部 {n} 条报警段，是模型的原始输出，未经人工确认，其中包含误报。")
+        st.info("Real alerts: all {n} alarm segments of {model} on the HAI 21.03 test set. They are the raw output of the model, have not been confirmed by a human, and include false alarms."
                 .format(model=alerts[0].get("model", "model"), n=len(alerts)))
-    st.caption(t("免责声明：") + disclaimer())
+    st.caption("Disclaimer: " + DISCLAIMER)
 
     with st.sidebar:
-        st.header(t("融合打分参数"))
-        st.caption(t("只影响本页面的计算，不改写 fusion.yaml 和任何输出文件。"))
-        alpha = st.slider(t("α（暴露风险权重）"), 0.0, 3.0, float(defaults["alpha"]), 0.1)
-        beta = st.slider(t("β（EPSS 权重）"), 0.0, 3.0, float(defaults["beta"]), 0.1)
-        gamma = st.slider(t("γ（KEV 倍数）"), 1.0, 3.0, float(defaults["gamma"]), 0.1)
+        st.header("Fusion scoring parameters")
+        st.caption("Affects only the calculations on this page; fusion.yaml and all output files are left unchanged.")
+        alpha = st.slider("α (exposure risk weight)", 0.0, 3.0, float(defaults["alpha"]), 0.1)
+        beta = st.slider("β (EPSS weight)", 0.0, 3.0, float(defaults["beta"]), 0.1)
+        gamma = st.slider("γ (KEV multiplier)", 1.0, 3.0, float(defaults["gamma"]), 0.1)
         min_qod = st.select_slider("min_qod", options=[0, 30, 50, 70, 80, 95, 99], value=int(defaults["min_qod"]))
     params = {**defaults, "alpha": alpha, "beta": beta, "gamma": gamma, "min_qod": min_qod}
 
@@ -124,19 +122,19 @@ def main() -> None:
     n_total = len(result["alerts"])
     n_shown = min(n_total, limit or n_total)
 
-    tab_list, tab_card, tab_assets = st.tabs([t("告警列表"), t("告警卡片"), t("资产与子系统")])
+    tab_list, tab_card, tab_assets = st.tabs(["Alert list", "Alert card", "Assets and subsystems"])
 
     with tab_list:
         if n_shown < n_total:
-            st.caption(t("共 {n} 条报警，只列出优先级最高的前 {m} 条（config 的 fusion.max_rendered_alerts）。").format(n=n_total, m=n_shown))
+            st.caption("{n} alerts in total; only the {m} with the highest priority are listed (fusion.max_rendered_alerts in the config).".format(n=n_total, m=n_shown))
         st.dataframe(ranking_table(result, baseline, limit), hide_index=True, use_container_width=True)
-        st.caption(t("排序：按 Priority（未四舍五入的值）降序；Priority 相同时按 S 降序，仍相同时按告警编号升序。"))
-        st.caption(t("\"可能低估\"：路径上有一部分资产未评估（未扫描），按 0 计算。\"未评估\"：上游资产均未扫描，E_sub 记为 0。")
-                   + t("\"相对默认参数\"对比 fusion.yaml 中的参数。"))
+        st.caption("Order: by Priority (unrounded value), descending. Alerts with equal Priority are ordered by S, descending, and then by alert ID, ascending.")
+        st.caption('"Possibly underestimated": some of the assets on the path have not been assessed (not scanned); they are counted as 0. "Not assessed": no upstream asset has been scanned; E_sub is recorded as 0.'
+                   + ' "vs. default parameters" compares with the parameters in fusion.yaml.')
 
     with tab_card:
         ids = [a["alert_id"] for a in result["alerts"][:n_shown]]
-        chosen = st.selectbox(t("选择告警（按优先级排序）"), ids)
+        chosen = st.selectbox("Select an alert (sorted by priority)", ids)
         alert = next(a for a in result["alerts"] if a["alert_id"] == chosen)
         env = make_env(ROOT / cfg["fusion"]["templates_dir"])
         st.markdown(env.get_template("alert_card.md.j2").render(**card_context(alert, result)))
@@ -144,22 +142,22 @@ def main() -> None:
     with tab_assets:
         left, right = st.columns(2)
         with left:
-            st.subheader(t("资产风险 R_asset"))
+            st.subheader("Asset risk R_asset")
             st.dataframe(pd.DataFrame([
-                {t("资产"): aid, "R_asset": fmt_risk(a["R_asset"]), t("状态"): a["status"],
-                 t("参与计算漏洞数"): a["n_vulns"], t("需核实的 KEV 漏洞"): a["n_needs_review"]}
+                {"Asset": aid, "R_asset": fmt_risk(a["R_asset"]), "Status": a["status"],
+                 "Vulnerabilities counted": a["n_vulns"], "KEV vulns needing review": a["n_needs_review"]}
                 for aid, a in result["asset_risk"].items()]), hide_index=True, use_container_width=True)
         with right:
-            st.subheader(t("子系统暴露风险 E_sub"))
+            st.subheader("Subsystem exposure risk E_sub")
             # Cells of st.table wrap automatically (the "unassessed upstream" column is long; st.dataframe would truncate it)
             st.table(pd.DataFrame([
-                {t("子系统"): sid, t("名称"): t_data(graph.subsystems[sid].name),
+                {"Subsystem": sid, "Name": graph.subsystems[sid].name,
                  "E_sub": subsystem_esub_text(s),
-                 t("来源资产"): s["max_asset"] or "-", t("未评估上游"): t("、").join(s["unassessed_assets"]) or "-"}
-                for sid, s in result["subsystem_risk"].items()]).set_index(t("子系统")))
+                 "Source asset": s["max_asset"] or "-", "Unassessed upstream": ", ".join(s["unassessed_assets"]) or "-"}
+                for sid, s in result["subsystem_risk"].items()]).set_index("Subsystem"))
         topo = ROOT / cfg["report"]["extension_dir"] / "asset_topology.png"
         if topo.exists():
-            st.image(str(topo), caption=t("资产拓扑（python -m scripts.make_extension_report 生成）"))
+            st.image(str(topo), caption="Asset topology (generated by python -m scripts.make_extension_report)")
 
 
 main()

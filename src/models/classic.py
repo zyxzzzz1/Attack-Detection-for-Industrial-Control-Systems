@@ -50,7 +50,7 @@ class PCAModel(_JoblibModel):
         """Fit on all per-second vectors of the train part, keeping the variance fraction given by variance. No early stopping; val_es_ds is unused."""
         params = self.cfg["ml"]["models"]["pca"]
         if params["input"] != "per_second":
-            raise ValueError("PCA 只实现了逐秒向量输入（ml.models.pca.input = per_second）")
+            raise ValueError("PCA only implements per-second vector input (ml.models.pca.input = per_second)")
         x = np.concatenate(train_ds.segments).astype(np.float64)
         pca = PCA(n_components=params["variance"], svd_solver="full").fit(x)
         self.state = {"pca": pca}

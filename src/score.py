@@ -66,9 +66,9 @@ def run(ctx) -> dict:
     result = {"val_thr_seconds": len(val_scores), "val_thr_unscored": int(np.isnan(val_scores).sum()),
               "test_seconds": len(test_scores), "test_unscored": int(np.isnan(test_scores).sum()),
               "has_per_sensor_err": test_err is not None}
-    ctx.log.info("打分完成：%s", result)
+    ctx.log.info("scoring done: %s", result)
     return result
 
 
 if __name__ == "__main__":
-    sys.exit(stage_cli("score", "用训练好的模型给 val_thr 和 test 打分"))
+    sys.exit(stage_cli("score", "Score val_thr and test with a trained model"))

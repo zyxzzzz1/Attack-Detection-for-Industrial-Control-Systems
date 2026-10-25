@@ -52,7 +52,7 @@ def evaluate_scores(scores: np.ndarray, index: dict, labels: dict[str, pd.DataFr
     for f in index["files"]:
         df = labels[f["file"]].iloc[f["start_row"]:f["start_row"] + f["rows"]]
         if len(df) != f["rows"] or pd.Timestamp(df[time_col].iloc[0]) != pd.Timestamp(f["start_time"]):
-            raise ValueError(f"{f['file']} 的标签与分数对不上（行数或起始时间不一致）")
+            raise ValueError(f"the labels of {f['file']} do not match the scores (row count or start time differs)")
         s = scores[f["offset"]:f["offset"] + f["rows"]]
         y = df[main_col].to_numpy()
         per_file.append({"file": f["file"], "start_row": f["start_row"], "rows": f["rows"], **point_metrics(s, y, threshold)})
@@ -113,13 +113,13 @@ def run(ctx) -> dict:
                                                      encoding="utf-8")
     events_df.to_csv(ctx.directory / "eval_events.csv", index=False)
     alarms_df.to_csv(ctx.directory / "eval_alarms.csv", index=False)
-    ctx.log.info("逐点（不使用 point-adjust）：P %.4f  R %.4f  F1 %.4f  AUROC %.4f；排除未打分 %d 秒",
+    ctx.log.info("point-wise (no point-adjust): P %.4f  R %.4f  F1 %.4f  AUROC %.4f; %d unscored seconds excluded",
                  point["precision"], point["recall"], point["f1"], point["auroc"], point["n_unscored"])
-    ctx.log.info("事件：检出 %d / %d，漏检 %d，延迟中位数 %s 秒；报警段 %d 个，其中误报 %d 个（%.3f 次/小时）",
+    ctx.log.info("events: detected %d / %d, missed %d, median delay %s s; %d alarm segments, %d of them false alarms (%.3f per hour)",
                  event["n_detected"], event["n_events"], event["n_missed"], event["delay_median_s"],
                  event["n_alarm_segments"], event["n_false_alarm_segments"], event["false_alarms_per_hour"])
     return clean(main_row)
 
 
 if __name__ == "__main__":
-    sys.exit(stage_cli("evaluate", "用 test 标签评估已打分的模型"))
+    sys.exit(stage_cli("evaluate", "Evaluate a scored model against the test labels"))

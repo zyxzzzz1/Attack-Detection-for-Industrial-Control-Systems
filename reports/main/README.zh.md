@@ -3,11 +3,11 @@
 [English](README.md) | **中文**
 
 全部由脚本从集群完整运行的产物生成（非冒烟、`git_dirty=false`、已完成）；冒烟测试的数字没有进入这里。
-检测指标**不使用 point-adjust**，阈值为 val_thr 分数的 99% 分位数。写报告时先看 `key_numbers.zh.md`（英文版为 `key_numbers.md`）。
+检测指标**不使用 point-adjust**，阈值为 val_thr 分数的 99% 分位数。写报告时先看 `key_numbers.md`。
 
 | 文件 | 内容 | 生成命令 |
 |---|---|---|
-| `key_numbers.md`、`key_numbers.zh.md` | 关键数字汇总（英文 / 中文，同一次生成）：检测 / 归因 / 融合 / 数据问题，每个数字带口径和来源 | `python -m scripts.make_key_numbers` |
+| `key_numbers.md` | 关键数字汇总：检测 / 归因 / 融合 / 数据问题，每个数字带口径和来源 | `python -m scripts.make_key_numbers` |
 | `data_summary.md`、`attack_events.csv` | 原始数据统计；train 与 test 的重叠；50 个攻击事件及其子系统 | `python -m scripts.hai_data_summary` |
 | `main_results.csv/.md` | 主结果表（5 个模型）。`.md` 中 LSTM-AE 一行的 F1、AUROC、事件检出率、误报率是 5 个种子的均值 ± 标准差；csv 是种子 42 的运行 | `python -m scripts.make_main_report` |
 | `main_results_seeds.csv` | LSTM-AE 主配置 5 个种子的逐种子结果与均值、标准差 | 同上 |
@@ -30,8 +30,7 @@
 相关文件：真实报警 `data/processed/alerts.json`（`python -m scripts.export_alerts`）；扩展部分的素材在 `reports/extension/`。
 从同步集群产物到生成全部表图的命令顺序见 `docs/cluster_queue.md` 末尾。
 
-图表、`cases.md` 和案例卡片按 `config.yaml` 的 `ui.lang` 生成（默认 en，可改为 zh 后重新运行上面的命令得到中文版）；
-`key_numbers.md`、`data_overlap.md` 和 `README.md` 是英文（前者另有中文版 `key_numbers.zh.md`）；各张表和其余 Markdown 文档是中文。显示语言不影响任何数值。
+上面各脚本生成的图表、表格和文档全部是英文；本文件是 `README.md` 的中文副本。
 
 这些文件中引用的约束和决策编号（如"约束 7""决策 6b"，或写作"CLAUDE.md 约束 …"）的内容见
 [`docs/design_decisions.md`](../../docs/design_decisions.md)（英文）。

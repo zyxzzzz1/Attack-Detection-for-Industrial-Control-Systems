@@ -28,5 +28,5 @@ fi
 python -m pytest -q
 python -c "import torch; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else '')"
 if [[ "${SMOKE}" != "1" ]]; then
-    python -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else '申请了 GPU 但 torch 用不了：检查 torch 的 CUDA 构建与驱动版本（env/README.md）')"
+    python -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 'A GPU was requested but torch cannot use it: check the CUDA build of torch and the driver version (env/README.md)')"
 fi
